@@ -24,8 +24,5 @@
     <ClCompile Include="main.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\Share\ProcessHandling.c">
-      <Filter>Shared Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
 </Project>

@@ -1,4 +1,5 @@
 #include "ProcessHandling.h"
+
 // This C File contains All API functions for Handling Threads in main.c
 int openProcess(char* command, STARTUPINFO	*startinfo, PROCESS_INFORMATION *procinfo)
 {

@@ -24,8 +24,13 @@
     <ClCompile Include="main.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\Share\ProcessHandling.c">
-      <Filter>Shared Source Files</Filter>
+    <ClCompile Include="..\..\..\..\Desktop\EX3\EX3\ProcessHandling.c">
+      <Filter>Resource Files</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\..\Desktop\EX3\EX3\ProcessHandling.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
