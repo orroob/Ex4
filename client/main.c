@@ -39,7 +39,7 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 		break;
 	
 	case CLIENT_VERSUS:
-		if ((buffSize = snprintf(NULL, 0, "CLIENT_VERSUS\n")) == 0) //snprintf returns num of characters
+		if ((buffSize = snprintf(NULL, 0, "CLIENT_VERSUS:\n")) == 0) //snprintf returns num of characters
 		{
 			return NULL;
 		}

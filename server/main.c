@@ -12,9 +12,176 @@
 #include <stdlib.h> 
 #include <string.h>
 
+#define SERVER_APPROVED 0
+#define SERVER_DENIED 1
+#define SERVER_MAIN_MENU 2
+#define GAME_STARTED 3
+#define TURN_SWITCH 4
+#define SERVER_MOVE_REQUEST 5
+#define GAME_ENDED 6
+#define SERVER_NO_OPPONENTS 7
+#define GAME_VIEW 8
+#define SERVER_OPPONENT_QUIT 9 
+char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
+{
+
+	char* buffer;
+	int buffSize;
+	switch (messageType)
+	{
+	case SERVER_APPROVED:
+		if ((buffSize = snprintf(NULL, 0, "SERVER_APPROVED:\n")) == 0) //snprintf returns num of characters
+		{
+			return NULL;
+		}
+		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
+		{
+			return NULL;
+		}
+		sprintf_s(buffer, buffSize + 1, "SERVER_APPROVED:\n", arg1);
+		break;
+
+	case SERVER_DENIED:
+		if ((buffSize = snprintf(NULL, 0, "SERVER_DENIED:\n")) == 0) //snprintf returns num of characters
+		{
+			return NULL;
+		}
+
+		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
+		{
+			return NULL;
+		}
+		sprintf_s(buffer, buffSize + 1, "SERVER_DENIED:\n", arg1);
+		break;
+	case SERVER_MAIN_MENU:
+		if ((buffSize = snprintf(NULL, 0, "SERVER_MAIN_MENU:%s\n", arg1)) == 0) //snprintf returns num of characters
+		{
+			return NULL;
+		}
+
+		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
+		{
+			return NULL;
+		}
+		sprintf_s(buffer, buffSize + 1, "SERVER_MAIN_MENU:\n",arg1);
+		break;
+	case GAME_STARTED:
+		if ((buffSize = snprintf(NULL, 0, "GAME_STARTED:\n")) == 0) //snprintf returns num of characters
+		{
+			return NULL;
+		}
+
+		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
+		{
+			return NULL;
+		}
+		sprintf_s(buffer, buffSize + 1, "GAME_STARTED:\n", arg1);
+		break;
+	case TURN_SWITCH:
+		if ((buffSize = snprintf(NULL, 0, "TURN_SWITCH:%s\n", arg1)) == 0) //snprintf returns num of characters
+		{
+			return NULL;
+		}
+
+		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
+		{
+			return NULL;
+		}
+		sprintf_s(buffer, buffSize + 1, "TURN_SWITCH:%s\n", arg1);
+		break;
+	case SERVER_MOVE_REQUEST:
+		if ((buffSize = snprintf(NULL, 0, "SERVER_MOVE_REQUEST:\n", arg1)) == 0) //snprintf returns num of characters
+		{
+			return NULL;
+		}
+
+		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
+		{
+			return NULL;
+		}
+		sprintf_s(buffer, buffSize + 1, "SERVER_MOVE_REQUEST:\n", arg1);
+		break;
+
+	case GAME_ENDED:
+		if ((buffSize = snprintf(NULL, 0, "GAME_ENDED:%s\n", arg1)) == 0) //snprintf returns num of characters
+		{
+			return NULL;
+		}
+
+		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
+		{
+			return NULL;
+		}
+		sprintf_s(buffer, buffSize + 1, "GAME_ENDED:$s\n", arg1);
+		break;
+
+	case SERVER_NO_OPPONENTS:
+		if ((buffSize = snprintf(NULL, 0, "SERVER_NO_OPPONENTS:\n")) == 0) //snprintf returns num of characters
+		{
+			return NULL;
+		}
+
+		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
+		{
+			return NULL;
+		}
+		sprintf_s(buffer, buffSize + 1, "SERVER_NO_OPPONENTS:\n", arg1);
+		break;
+
+	case GAME_VIEW:
+		if ((buffSize = snprintf(NULL, 0, "GAME_VIEW:%s;%s;%s\n")) == 0,arg1, arg2, arg3) //snprintf returns num of characters
+		{
+			return NULL;
+		}
+
+		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
+		{
+			return NULL;  
+		}
+		sprintf_s(buffer, buffSize + 1, "GAME_VIEW:%s;%s;%s\n", arg1, arg2, arg3);
+		break;
+
+	case SERVER_OPPONENT_QUIT:
+		if ((buffSize = snprintf(NULL, 0, "SERVER_OPPONENT_QUIT:%s\n")) == 0, arg1) //snprintf returns num of characters
+		{
+			return NULL;
+		}
+
+		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
+		{
+			return NULL;
+		}
+		sprintf_s(buffer, buffSize + 1, "SERVER_OPPONENT_QUIT:\n", arg1);
+		break;
+
+//#define SERVER_NO_OPPONENTS 9 
+	
+	
+	
+	
+	
+	default:
+		buffer = NULL;
+	}
+	return buffer;
+
+}
+
+
+
+
+
+DWORD WINAPI threadExecute(SOCKET parameters) {
+
+}
+
 int main(int argc, char* argv[])
 {
+
+	char a[100] = { 0 };
+	strcpy(a, PrepareMessage(4, "Philip", NULL, NULL));
 	// Initialize Winsock
+
 	WSADATA wsa_data;
 	int result;
 	result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
@@ -22,9 +189,10 @@ int main(int argc, char* argv[])
 		printf("WSAStartup failed: %d\n", result);
 		return 1;
 	}
-
 	// Create and init socket
 	SOCKET server_s;
+
+
 	if ((server_s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == INVALID_SOCKET)
 	{
 		printf("Could not create socket : %d", WSAGetLastError());
@@ -71,14 +239,16 @@ int main(int argc, char* argv[])
 		printf("Accepting connection with client failed, error %ld\n", WSAGetLastError());
 		//goto server_cleanup_3;
 	}
-
+	HANDLE Threads[2];
+	DWORD threadIDs[10];
+	int openedsuccessfuly[2];
 	while (1)
 	{ // &client_addr
-		
+	
 	  //set descriptors
 		FD_ZERO(&fds);
 		FD_SET(client_s, &fds);
-
+		
 		retval = select(max(server_s, stdin) + 1, &fds, NULL, NULL, &timeout);
 		if (retval < 0)
 		{//error occured
@@ -94,6 +264,11 @@ int main(int argc, char* argv[])
 
 				//Receive data from the channel
 				int buffer_len = recvfrom(client_s, buffer, 2, 0, (struct sockaddr*)&server_addr, &server_addrss_len); // ********* replace with client address
+				if (openThread(&((Threads)[0]), &threadExecute, &client_s , &(threadIDs[0])))
+				{
+					openedsuccessfuly[0] = 0; // if thread wasnt opened successfully
+					printf("Error with thread %d\n", 0);
+				}
 				if (buffer_len == 0)
 				{
 					return 1;
