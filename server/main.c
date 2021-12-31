@@ -153,18 +153,10 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 		}
 		sprintf_s(buffer, buffSize + 1, "SERVER_OPPONENT_QUIT:\n", arg1);
 		break;
-
-//#define SERVER_NO_OPPONENTS 9 
-	
-	
-	
-	
-	
 	default:
 		buffer = NULL;
 	}
 	return buffer;
-
 }
 
 
@@ -172,14 +164,20 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 
 
 DWORD WINAPI threadExecute(SOCKET parameters) {
-
+	char buffer[100] = { 0 };
+	strcpy(buffer, PrepareMessage(0, "Philip" , NULL, NULL));
+	//if (sendto(server_s, buffer, strlen(buffer) - 1, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
+	//{
+	//	printf("sendto() failed with error code : %d", WSAGetLastError());
+	//	return 1;
+	//}
 }
 
 int main(int argc, char* argv[])
 {
 
-	char a[100] = { 0 };
-	strcpy(a, PrepareMessage(4, "Philip", NULL, NULL));
+	//char a[100] = { 0 };
+	//strcpy(a, PrepareMessage(4, "Philip", NULL, NULL));
 	// Initialize Winsock
 
 	WSADATA wsa_data;
@@ -283,6 +281,7 @@ int main(int argc, char* argv[])
 			continue;
 		}
 	}
+	
 	// Deinitialize Winsock
 	result = WSACleanup();
 	if (result != 0) {

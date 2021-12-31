@@ -18,7 +18,7 @@
 #define CLIENT_PLAYER_MOVE 2
 #define CLIENT_DISCONNECT 3
 
-char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
+char* PrepareMessage(int messageType, char* arg1)
 {
 	
 	char* buffer;
@@ -34,7 +34,7 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 		{
 			return NULL;
 		}
-		printf("prepare m started\n");
+		//printf("prepare m started\n");
 		sprintf_s(buffer, buffSize+1, "CLIENT_REQUEST:%s\n", arg1);
 		break;
 	
@@ -109,15 +109,18 @@ int main(int argc, char* argv[])
 	server_addr.sin_addr.s_addr = inet_addr(argv[1]);		// IP address
 	int client_addr_len = sizeof(server_addr);
 
+	char* buffer, input[10] = { 0 };
+
 	// Call the connect function, passing the created socket and the sockaddr_in structure as parameters. 
 	// Check for general errors.
 	if (connect(client_s, (SOCKADDR*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
-		printf("Failed to connect due to %d.\n", WSAGetLastError());
-		WSACleanup();
+		printf("Failed to connect to server on %s:%s.\nChoose what to do next:\n1. Try to reconnect\n2. Exit", argv[1], argv[2]);
+		gets(input);
+		WSACleanup(); 
 		return 1;
-	}
+	} // WSAGetLastError()
 
-
+	printf("Connected to server on %s:%s.\n" ,argv[1], argv[2]);
 	// Setup timeval variable and fd_set variable
 	struct timeval timeout;
 	timeout.tv_sec = 0;
@@ -125,68 +128,78 @@ int main(int argc, char* argv[])
 	
 	struct fd_set fds;
 	
-	char *buffer, input[10] = { 0 };
-	buffer = PrepareMessage(CLIENT_REQUEST, "or", NULL, NULL);
-	if (buffer == NULL)
-	{
-		printf("oops");
-		return 1;
-	}
-	Sleep(10000);
-	if (sendto(client_s, buffer, strlen(buffer) - 1, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
+	
+	//buffer = PrepareMessage(CLIENT_REQUEST, "or");
+	//if (buffer == NULL)
+	//{
+	//	printf("oops");
+	//	return 1;
+	//}
+	//Sleep(5000);
+	//if (sendto(client_s, buffer, strlen(buffer) - 1, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
+	//{
+	//	printf("sendto() failed with error code : %d", WSAGetLastError());
+	//	return 1;
+	//}
+		 
+	//CLIENT_REQUEST
+	buffer =PrepareMessage(CLIENT_REQUEST, argv[3]);
+	 Sleep(5000);
+	if (sendto(client_s, buffer, strlen(buffer)-1, 0, (struct sockaddr *) &server_addr, sizeof(server_addr)) == SOCKET_ERROR)
 	{
 		printf("sendto() failed with error code : %d", WSAGetLastError());
 		return 1;
 	}
-		 
-	//CLIENT_REQUEST
-//	buffer =PrepareMessage(CLIENT_REQUEST, argv[3], NULL, NULL);
-//	if (sendto(client_s, buffer, strlen(buffer)-1, 0, (struct sockaddr *) &server_addr, sizeof(server_addr)) == SOCKET_ERROR)
-//	{
-//		printf("sendto() failed with error code : %d", WSAGetLastError());
-//		return 1;
-//	}
-//	// LOOP:
-//	while(1)
-//	{
-//		//recv SERVER_MAIN_MENU
-//		while (strcmp(input, "2") && strcmp(input, "1")) 
-//		{
-//			printf("Error: Illegal command\n");
-//			printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
-//			gets(input);
-//		}
-//
-//		//VERSUS_CLIENT / DISCONNECT_CLIENT
-//		if (!strcmp(input, "1"))
-//		{
-//			//CLIENT_VERSUS
-//			buffer = PrepareMessage(CLIENT_VERSUS, NULL, NULL, NULL);
-//			if (sendto(client_s, buffer, strlen(buffer), 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
-//			{
-//				printf("sendto() failed with error code : %d", WSAGetLastError());
-//				return 1;
-//			}
-//		}
-//		if (!strcmp(input, "2"))
-//		{
-//			//DISCONNECT_CLIENT
-//		}
-//
-//		while (1)
-//		{
-//			//recv GAME_STARTED
-//			//recv TURN_SWITCH
-//			//recv SERVER_MOVE_REQUEST / TURN_SWITCH
-//			gets(input);
-//			buffer = PrepareMessage(CLIENT_PLAYER_MOVE, input, NULL, NULL);
-//			if (sendto(client_s, buffer, strlen(buffer), 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
-//			{
-//				printf("sendto() failed with error code : %d", WSAGetLastError());
-//				return 1;
-//			}
-//		}
-//	}
+	// LOOP:
+	while(1)
+	{
+		//recv SERVER_MAIN_MENU
+
+		printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
+		gets(input);
+		while (strcmp(input, "2") && strcmp(input, "1")) 
+		{
+			printf("Error: Illegal command\n");
+			printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
+			gets(input);
+		}
+	
+		//CLIENT_VERSUS
+		if (!strcmp(input, "1"))
+		{
+			
+			buffer = PrepareMessage(CLIENT_VERSUS, NULL);
+			if (sendto(client_s, buffer, strlen(buffer), 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
+			{
+				printf("sendto() failed with error code : %d", WSAGetLastError());
+				return 1;
+			}
+		}
+		//DISCONNECT_CLIENT
+		if (!strcmp(input, "2"))
+		{
+			buffer = PrepareMessage(CLIENT_DISCONNECT, NULL);
+			if (sendto(client_s, buffer, strlen(buffer), 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
+			{
+				printf("sendto() failed with error code : %d", WSAGetLastError());
+				return 1;
+			}
+		}
+	
+		while (1)
+		{
+			//recv GAME_STARTED
+			//recv TURN_SWITCH
+			//recv SERVER_MOVE_REQUEST / TURN_SWITCH
+			gets(input);
+			buffer = PrepareMessage(CLIENT_PLAYER_MOVE, input);
+			if (sendto(client_s, buffer, strlen(buffer), 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
+			{
+				printf("sendto() failed with error code : %d", WSAGetLastError());
+				return 1;
+			}
+		}
+	}
 	
 	
 
@@ -202,7 +215,7 @@ int main(int argc, char* argv[])
 	//end LOOP
 
 
-
+	printf("Success");
 	// Deinitialize Winsock
 	result = WSACleanup();
 	if (result != 0) {
