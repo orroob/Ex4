@@ -29,6 +29,8 @@
 #define TRNS_SUCCEEDED 2
 #define TRNS_TIMEOUT 3
 #define TIME_OUT_ERROR 0
+#define CLIENT_PLAYER_MOVE 2 
+int Game_number =0;
 int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 {
 	char* CurPlacePtr = OutputBuffer;
@@ -249,7 +251,7 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 		break;
 
 	case GAME_VIEW:
-		if ((buffSize = snprintf(NULL, 0, "GAME_VIEW:%s;%s;%s\n")) == 0,arg1, arg2, arg3) //snprintf returns num of characters
+		if ((buffSize = snprintf(NULL, 0, "GAME_VIEW:%s;%s;%s\n", arg1, arg2, arg3)) == 0) //snprintf returns num of characters
 		{
 			return NULL;
 		}
@@ -262,7 +264,7 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 		break;
 
 	case SERVER_OPPONENT_QUIT:
-		if ((buffSize = snprintf(NULL, 0, "SERVER_OPPONENT_QUIT:%s\n")) == 0, arg1) //snprintf returns num of characters
+		if ((buffSize = snprintf(NULL, 0, "SERVER_OPPONENT_QUIT:%s\n", arg1)) == 0) //snprintf returns num of characters
 		{
 			return NULL;
 		}
@@ -278,7 +280,6 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 	}
 	return buffer;
 }
-
 int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
 {
 	const char* CurPlacePtr = Buffer;
@@ -305,9 +306,7 @@ int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
 
 	return TRNS_SUCCEEDED;
 }
-
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
-
 int SendString(const char* Str, SOCKET sd)
 {
 	/* Send the the request to the server on socket sd */
@@ -333,25 +332,204 @@ int SendString(const char* Str, SOCKET sd)
 
 	return SendRes;
 }
+int containsDigit(int number) // gets str and checks there is no 7 in it or 7 doesnt divide the number
+{
+	while (number != 0)
+	{
+		if (number % 7 == 0) {
+			printf("Number contains 7");
+			return 1;
+		}
+		int curr_digit = number % 10;
+		if (curr_digit == 7) {
+			printf("Number contains 7");
+			return 1;
+		}
+		number /= 10;
+	}
 
-
-
-
-DWORD WINAPI threadExecute(SOCKET *client_s) {
-	//char buffer[100] = { 0 };
-	//strcpy(buffer, PrepareMessage(0, "Philip" , NULL, NULL));
-	char* send = "SERVER_APPROVED";
-	SendString(send, *client_s);
 	return 0;
+}
+int containsBOOM(char* input) {
+	char BOOM[5] = "boom";
+	if (!strcmp(BOOM, input)) {
+		return 1; // if boom was the input 
+	}
+	return 0;
+}
+int LEGAL_MOVE(char* next_move) {
+	//int legal_move = Game_number+1;
+	//if (containsDigit(legal_move)) {
+	//	legal_move = -1;
+	//}
+	//return legal_move;
+	if (containsBOOM(next_move)) {
+		if (containsDigit(Game_number +1)) {
+			return 1;
+		}
+		return 0;
+	}
+	else {
+		if (containsDigit(Game_number + 1)) {
+			return 0;
+		}
+		if (atoi(next_move) == Game_number + 1) {
+			return 1;
+		}
+		
+	}
+	printf("FORGOT ssssssss");
+	return 0;
+}
+int getArgsFromMessage(char* message, char** arg1, char** arg2, char** arg3)
+{
+	char mType[20] = { 0 };
+	int i = 0; 
+	char* temp = message, *temp1;
+	while (temp != NULL && *temp != ':')
+	{
+		mType[i] = *temp;
+		temp++;
+		i++;
+	}
+	if (temp == NULL)
+		return -1;
+	mType[i] = '\0';
+	//*temp = '\0';
+	//strcpy(mType, message);
+
+	if (!strcmp(mType, "GAME_ENDED"))
+	{
+		temp1 = strrchr(temp + 1, ";");
+		*temp1 = '\0';
+		strcpy(*arg1, temp+1);
+
+		return GAME_ENDED;
+	}
+	if (!strcmp(mType, "TURN_SWITCH")) {
+		temp1 = strrchr(temp + 1, ";");
+		*temp1 = '\0';
+		strcpy(*arg1, temp + 1);
+		return TURN_SWITCH;
+	}
+	if (!strcmp(mType, "GAME_VIEW")) {
+		
+		temp1 = strrchr(temp + 1, ";");
+		*temp1 = '\0';
+		strcpy(*arg1, temp + 1);
+		temp = temp1 + 1;
+		temp1 = strrchr(temp, ";");
+		*temp1 = '\0';
+		strcpy(*arg2, temp + 1);
+		temp = temp1 + 1;
+		temp1 = strrchr(temp, ";");
+		*temp1 = '\0';
+		strcpy(*arg3, temp + 1);
+		return GAME_VIEW;
+	}
+	if (!strcmp(mType, "CLIENT_PLAYER_MOVE")) {
+		temp++;
+		i = 0;
+		while (temp != NULL && *temp != '\n')
+		{
+			//strcpy(*arg1, temp);
+			//*arg1 = temp;    
+			arg1[i] = *temp;                          //////////// DOESNT WORK!!!!!
+			temp++;
+			i++;
+		}
+		//*temp = '\0';
+
+		//strcpy(*arg1,temp1);
+		//temp1 = strrchr(temp + 1, "\\");
+		//*temp1 = '\0';
+		//strcpy(*arg1, temp + 1);
+		return CLIENT_PLAYER_MOVE;
+	}
+}
+DWORD WINAPI threadExecute(SOCKET *client_s) {
+	
+	char *send ,* recieved =NULL;
+	int Rec, Game_Ended_flag = 0;
+	send = PrepareMessage(SERVER_APPROVED, NULL,NULL,NULL);
+	if (SendString(send, *client_s) !=TRNS_SUCCEEDED) {
+		printf("Failed to send Server approved");
+	}
+	free(send);
+	send = NULL;
+	//
+	// RECV CLIENT_VERSUS
+	
+	Sleep(1000);
+
+	Rec = RecvDataThread(&recieved, *client_s);   
+	if (Rec == TRNS_SUCCEEDED) {
+		if (!strcmp(recieved, "CLIENT_VERSUS\n")) {
+			free(recieved);
+			recieved = NULL;
+			send = PrepareMessage(GAME_STARTED, NULL, NULL, NULL);
+			SendString(send, *client_s);
+			free(send);
+			send = NULL;
+			//TURN_SWITCH
+			send = PrepareMessage(TURN_SWITCH, "Philip",NULL,NULL); /////////// for now Parameter is Pseudo 
+			SendString(send, *client_s);
+			free(send);
+			send = NULL;
+			//SERVER SERVER_MOVE_REQUEST
+			send = PrepareMessage(SERVER_MOVE_REQUEST,NULL, NULL, NULL); 
+			SendString(send, *client_s);
+			free(send);
+			send = NULL;
+
+			//RECV PLAYER_MOVE_REQUEST
+			
+			Rec = RecvDataThread(&recieved, *client_s); 
+			if (Rec == TRNS_SUCCEEDED) {
+				char next_move[30] = {0};
+				getArgsFromMessage(recieved, &next_move, NULL, NULL);
+				if (LEGAL_MOVE(next_move)) {
+					//////SEND mESsAGE TO OTHER PLAYER
+
+				}
+
+				else {
+					Game_Ended_flag = 1;
+
+				}
+				if (Game_Ended_flag != 1) {
+					send = PrepareMessage(GAME_VIEW, "Other_Players_name", recieved, "CONT"); /////////// for now Parameter is Pseudo 
+					SendString(send, *client_s);
+					free(send);
+					send = NULL;
+				}
+				else {
+					send = PrepareMessage(GAME_VIEW, "Other_Players_name", recieved, "END"); /////////// for now Parameter is Pseudo 
+					SendString(send, *client_s);
+					free(send);
+					send = NULL;
+				}
+
+			}
+			send = PrepareMessage(GAME_ENDED, "WHO_WON", NULL,NULL); /////////// for now Parameter is Pseudo 
+			SendString(send, *client_s);
+			free(send);
+			send = NULL;
+
+		}
+		else {
+			// Quit
+		}
+	}
+	
+	// 
+	// TURN_SWITCH
+	// 
+	//return 0;
 }
 
 int main(int argc, char* argv[])
 {
-
-	//char a[100] = { 0 };
-	//strcpy(a, PrepareMessage(4, "Philip", NULL, NULL));
-	// Initialize Winsock
-
 	WSADATA wsa_data;
 	int result;
 	result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
@@ -361,14 +539,11 @@ int main(int argc, char* argv[])
 	}
 	// Create and init socket
 	SOCKET server_s;
-
-
 	if ((server_s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == INVALID_SOCKET)
 	{
 		printf("Could not create socket : %d", WSAGetLastError());
 		return 1;
 	}
-
 	struct sockaddr_in server_addr;
 	struct sockaddr_in client_addr;
 	server_addr.sin_family = AF_INET;
@@ -391,11 +566,9 @@ int main(int argc, char* argv[])
 	timeout.tv_usec = 0;
 
 	int retval, received=0;
-	char buffer[3] = { 0 };
-
+	//char buffer[3] = { 0 };
 
 	//wait for data to be sent by the channel
-
 	int ListenRes = listen(server_s, SOMAXCONN);
 	if (ListenRes == SOCKET_ERROR)
 	{
@@ -435,26 +608,26 @@ int main(int argc, char* argv[])
 				//Receive data from the channel
 				char* recieved=NULL;
 				int Rec;
+				//CLIENT_REQUEST 
 				Rec = RecvDataThread(&recieved, client_s);
-				//int buffer_len = recvfrom(client_s, buffer, 2, 0, (struct sockaddr*)&server_addr, &server_addrss_len); // ********* replace with client address
-	///// CHECK IF THERE ARE NO MORE THN 2 THREADS OR DENY
+				if (Rec != TRNS_SUCCEEDED) {
+					return 1;
+				}
+			///// CHECK IF THERE ARE NO MORE THN 2 THREADS OR DENY
 				if (openThread(&((Threads)[0]), &threadExecute, &client_s , &(threadIDs[0])))
 				{
 					openedsuccessfuly[0] = 0; // if thread wasnt opened successfully
 					printf("Error with thread %d\n", 0);
 				}
-				//if (buffer_len == 0)
-				//{
-				//	return 1;
-				//}
-				//printf(buffer);
-				//received += buffer_len;
-				Sleep(50000);
+				
+				//TURN_SWITCHED 
+				Sleep(5000000);
 				break;
 			}
 		}
 		if (retval == 0)
 		{
+			//TIMEOUT?
 			continue;
 		}
 	}

@@ -93,8 +93,7 @@ int SendString(const char* Str, SOCKET sd)
 
 	return SendRes;
 }
-
-int getArgsFromMessage(char* message, char arg1, char arg2, char arg3)
+int getArgsFromMessage(char* message, char arg1)
 {
 	char mType[20] = { 0 };
 	char *temp = message;
@@ -270,16 +269,16 @@ char* PrepareMessage(int messageType, char* arg1)
 		break;
 	
 	case CLIENT_VERSUS:
-		if ((buffSize = snprintf(NULL, 0, "CLIENT_VERSUS:\n")) == 0) //snprintf returns num of characters
+		if ((buffSize = snprintf(NULL, 0, "CLIENT_VERSUS\n")) == 0) //snprintf returns num of characters
 		{
 			return NULL;
 		}
 
-		if ((buffer = malloc(buffSize * sizeof(char)) == NULL))
+		if ((buffer = malloc((buffSize+1) * sizeof(char))) == NULL)
 		{
 			return NULL;
 		}
-		sprintf_s(buffer, "CLIENT_VERSUS:\n", arg1);
+		sprintf_s(buffer, buffSize + 1, "CLIENT_VERSUS\n");
 		break;
 	case CLIENT_PLAYER_MOVE:
 		if ((buffSize = snprintf(NULL, 0, "CLIENT_PLAYER_MOVE:%s\n", arg1)) == 0) //snprintf returns num of characters
@@ -287,23 +286,23 @@ char* PrepareMessage(int messageType, char* arg1)
 			return NULL;
 		}
 
-		if ((buffer = malloc(buffSize * sizeof(char)) == NULL))
+		if ((buffer = malloc((buffSize +1)* sizeof(char))) == NULL)
 		{
 			return NULL;
 		}
-		sprintf_s(buffer, "CLIENT_PLAYER_MOVE:%s\n", arg1);
+		sprintf_s(buffer, buffSize+1, "CLIENT_PLAYER_MOVE:%s\n", arg1);
 		break;
 	case CLIENT_DISCONNECT:
-		if ((buffSize = snprintf(NULL, 0, "CLIENT_DISCONNECT:\n")) == 0) //snprintf returns num of characters
+		if ((buffSize = snprintf(NULL, 0, "CLIENT_DISCONNECT\n")) == 0) //snprintf returns num of characters
 		{
 			return NULL;
 		}
 
-		if ((buffer = malloc(buffSize * sizeof(char)) == NULL))
+		if ((buffer = malloc(buffSize * sizeof(char))) == NULL)
 		{
 			return NULL;
 		}
-		sprintf_s(buffer, "CLIENT_DISCONNECT:\n",arg1);
+		sprintf_s(buffer, "CLIENT_DISCONNECT\n",arg1);
 		break;
 	default:
 		buffer = NULL;
@@ -342,7 +341,6 @@ int Play_Game() {
 
 int main(int argc, char* argv[])
 {
-	//printf("%s\n%d\n%s\n", argv[1], atoi(argv[2]), argv[3]);
 	// Initialize Winsock
 	WSADATA wsa_data;
 	int result;
@@ -374,6 +372,7 @@ int main(int argc, char* argv[])
 	// Call the connect function, passing the created socket and the sockaddr_in structure as parameters. 
 	// Check for general errors.
 	//loop
+	while (1) {
 		if (connect(client_s, (SOCKADDR*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
 			printf("Failed to connect to server on %s:%s.\nChoose what to do next:\n1. Try to reconnect\n2. Exit", argv[1], argv[2]);
 			gets(input);
@@ -387,65 +386,37 @@ int main(int argc, char* argv[])
 		timeout.tv_usec = 0.5;
 
 		struct fd_set fds;
-
-
-		//buffer = PrepareMessage(CLIENT_REQUEST, "or");
-		//if (buffer == NULL)
-		//{
-		//	printf("oops");
-		//	return 1;
-		//}
-		//Sleep(5000);
-		//if (sendto(client_s, buffer, strlen(buffer) - 1, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
-		//{
-		//	printf("sendto() failed with error code : %d", WSAGetLastError());
-		//	return 1;
-		//}
-
 		//CLIENT_REQUEST
 		buffer = PrepareMessage(CLIENT_REQUEST, argv[3]);
-		Sleep(5000);
+		Sleep(1000);
 		SendString(buffer, client_s);
-		//if ()
-		//{
-		//	printf("sendto() failed with error code : %d\n", WSAGetLastError());
-		//	return 1;
-		//}
-		//#define SERVER_APPROVED 0
-			//#define SERVER_DENIED 1
-					//recv  SERVER_APPROVED or SERVER_DENIED
-					//SERVER_MAIN_MENU
 		int Rec = RecvDataThread(&recieved);
-		//switch (Rec)
-		//{
-		//case TRNS_FAILED || TRNS_DISCONNECTED || TRNS_TIMEOUT:
-		//	printf("FAILED");
-		//	break;
-		// NEED TO CHECK WHAT TO DO IF THE SERVER COULDNT SEND
-		//default:
-		//	
-		//	printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
-		//	gets(input);
-		//}
 		if (Rec == TRNS_SUCCEEDED) {
-
 			if (!strcmp(recieved, "SERVER_DENIED\n")) {
 				printf("Server on %s:%s denied the connection request.\nChoose what to do next:\n1. Try to reconnect\n2. Exit\n", argv[1], argv[2]);
-				gets(input); // if input is 2, Try to connect again
+				// if input is 1, Try to connect again
+				if (gets(input)) {
+					continue;
+				}
+				else {
+					//EXIT
+				}
 			}
 			else if (!strcmp(recieved, "SERVER_APPROVED\n"))
 			{
 				printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
 				gets(input);
+
 				//Take in considiration Quiting
 			}
+			break;
 		}
+	}
 	
 	// LOOP:
 	while (1)
 	{
-	
-		while (strcmp(input, "2") && strcmp(input, "1")) 
+		while (strcmp(input, "2") && strcmp(input, "1"))
 		{
 			printf("Error: Illegal command\n");
 			printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
@@ -455,66 +426,97 @@ int main(int argc, char* argv[])
 		//CLIENT_VERSUS
 		if (!strcmp(input, "1"))
 		{
-			
 			buffer = PrepareMessage(CLIENT_VERSUS, NULL);
-			if (sendto(client_s, buffer, strlen(buffer), 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
-			{
-				printf("sendto() failed with error code : %d", WSAGetLastError());
-				return 1;
+			if (SendString(buffer, client_s) != TRNS_SUCCEEDED) {
+				printf("Failed to send Server approved");
 			}
 		}
 		//DISCONNECT_CLIENT
 		if (!strcmp(input, "2"))
 		{
 			buffer = PrepareMessage(CLIENT_DISCONNECT, NULL);
-			if (sendto(client_s, buffer, strlen(buffer), 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
-			{
+			if (SendString(buffer, client_s) != TRNS_SUCCEEDED) {
 				printf("sendto() failed with error code : %d", WSAGetLastError());
+				closesocket(client_s);
+				free(buffer);
 				return 1;
 			}
-			Sleep(2000);
+			Sleep(1000);
 			closesocket(client_s);
 		}
-	
+		//recv GAME_STARTED
+		free(recieved);
+		recieved = NULL;
+		int Rec = RecvDataThread(&recieved);
+		if (Rec == TRNS_SUCCEEDED) {
+			if (!strcmp(recieved, "GAME_STARTED\n")) {
+				printf("Game is on!\n");
+			}
+			else {
+				printf("ERROR\n");
+			}
+		}
 		while (1)
-		{//recv GAME_STARTED
+		{
+		//recv TURN_SWITCH
 			free(recieved);
+			recieved = NULL;
 			Rec = RecvDataThread(&recieved);
 			if (Rec == TRNS_SUCCEEDED) {
 
-				if (!strcmp(recieved, "GAME_STARTED\n")) {
-					printf("Game is on!\n");
-					
+				if (!strcmp(recieved, "TURN_SWITCH:Philip\n")) { ////TEMPORARY
+					free(recieved);
+					recieved = NULL;
+					//SERVER_MOVE_REQUEST
+					Rec = RecvDataThread(&recieved);
 				}
-				else 
-				{
-					printf("ERROR\n");
-					
+				else if (!strcmp(recieved, "TURN_SWITCH:%s\n", "Other Player Name")) {
+					//GAME_VIEW wait 
+					free(recieved);
+					recieved = NULL;
+					Rec = RecvDataThread(&recieved);
+					if (Rec == TRNS_SUCCEEDED) {
+					//	if (!strcmp(recieved, "GAME_VIEW\n")) {/////////////////////// ARGUMENTS
+					//	}
+					}
+					// wait for another turn switch
 				}
-			}
-			free(recieved);
-			Rec = RecvDataThread(&recieved);
-			if (Rec == TRNS_SUCCEEDED) {
+					if (Rec == TRNS_SUCCEEDED) {
+						if (!strcmp(recieved, "SERVER_MOVE_REQUEST\n")) {
+							printf("Enter the next number or boom:\n");
+							gets(input);
+							buffer = PrepareMessage(CLIENT_PLAYER_MOVE, input);
+							if (SendString(buffer, client_s) != TRNS_SUCCEEDED) {
+								printf("sendto() failed with error code : %d", WSAGetLastError());
+								closesocket(client_s);
+								free(buffer);
+								return 1;
+											}
 
-				if (!strcmp(recieved, "TURN_SWITCH\n")) {
-					continue;
-				}
-				else
-				{
-					printf("ERROR\n");
-
-				}
-			}
-
+									}
+							}
 	
-			//recv SERVER_MOVE_REQUEST / TURN_SWITCH
-			gets(input);
-			buffer = PrepareMessage(CLIENT_PLAYER_MOVE, input);
-			if (sendto(client_s, buffer, strlen(buffer), 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
-			{
-				printf("sendto() failed with error code : %d", WSAGetLastError());
-				return 1;
+				free(recieved);
+				recieved = NULL;
+				// RECV GAME_VIEW
+				Rec = RecvDataThread(&recieved);
+				if (Rec == TRNS_SUCCEEDED) {
+					if (!strcmp(recieved, "GAME_VIEW:%s;%s;%s\n","Other player", "Move", "CONT\DONE")) {
+					if(1){
+						//if  not done
+						if (1) {
+							continue;
+						}
+						else{
+
+							//finish game 
+							return 1;//
+						}
+					}
+
+				}
 			}
+
 		}
 	}
 	
