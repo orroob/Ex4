@@ -156,13 +156,13 @@ int getArgsFromMessage(char* message, char **arg1, char** arg2, char** arg3)
 
 int transMessageToInt(char* message, char** arg1, char** arg2, char** arg3)
 {
-	if (!strcmp(message, "SERVER_APPROVED"))
+	if (!strcmp(message, "SERVER_APPROVED\n"))
 		return SERVER_APPROVED;
-	if (!strcmp(message, "SERVER_DENIED"))
+	if (!strcmp(message, "SERVER_DENIED\n"))
 		return SERVER_DENIED;
-	if (!strcmp(message, "SERVER_MAIN_MENU"))
+	if (!strcmp(message, "SERVER_MAIN_MENU\n"))
 		return SERVER_MAIN_MENU;
-	if (!strcmp(message, "GAME_STARTED"))
+	if (!strcmp(message, "GAME_STARTED\n"))
 		return GAME_STARTED;
 	if (!strcmp(message, "SERVER_MOVE_REQUEST"))
 		return SERVER_MOVE_REQUEST;
@@ -352,35 +352,6 @@ char* PrepareMessage(int messageType, char* arg1)
 	return buffer;
 }
 
-int GetDecodedMessage() {
-	int Rec, type;
-	char* recieved=NULL;
-	Rec = RecvDataThread(&recieved);
-	if (Rec == TRNS_SUCCEEDED) {
-
-		switch (type)
-		{
-		case GAME_STARTED:
-			printf("Game is on!");
-			break;
-		case TURN_SWITCH:
-		//	if (name == ourName)
-		//	{
-		//		receive SERVER_MOVE_REQUEST;
-		//		send CLIENT_PLAYER_MOVE;
-		//	}
-			break;
-		case GAME_VIEW:
-			//write to log
-			break;
-		case GAME_ENDED:
-			break;
-		}
-		
-	}
-}
-
-
 int PlayGame()
 {
 	char* received = NULL, * input = NULL, * buffer = NULL;
@@ -390,36 +361,64 @@ int PlayGame()
 	otherPlayerMove = malloc(20 * sizeof(char));
 	gameStatus = malloc(20 * sizeof(char));
 
-	while(!gameStruct.gameEnded)
-	Rec = RecvDataThread(&received);
-	if (Rec == TRNS_SUCCEEDED)
+	while (!gameStruct.gameEnded)
 	{
-		type = transMessageToInt(received, &name, &otherPlayerMove, &gameStatus);
-		switch (type)
+		Rec = RecvDataThread(&received);
+		if (Rec == TRNS_SUCCEEDED)
 		{
-		case TURN_SWITCH:
-			if (!strcmp(name, clientName))
-			{//our turn 
-				Rec = RecvDataThread(&received);
-				if (Rec == TRNS_SUCCEEDED)
-				{
-					type = transMessageToInt(received, &name, &otherPlayerMove, &gameStatus);
-					if (type == SERVER_MOVE_REQUEST)
+			type = transMessageToInt(received, &name, &otherPlayerMove, &gameStatus);
+			switch (type)
+			{
+			case TURN_SWITCH:
+				if (!strcmp(name, clientName))
+				{//our turn 
+					printf("Your turn!\n");
+					free(received);
+					received = NULL;
+					Rec = RecvDataThread(&received);
+					if (Rec == TRNS_SUCCEEDED)
 					{
-						//send (gets -> sendbuffer)
+						type = transMessageToInt(received, &name, &otherPlayerMove, &gameStatus);
+						if (type == SERVER_MOVE_REQUEST)
+						{
+							printf("Enter the next number or boom:\n");
+							gets(input);
+							buffer = PrepareMessage(CLIENT_PLAYER_MOVE, input);
+							if (SendString(buffer, client_s) != TRNS_SUCCEEDED)
+							{
+								printf("send failed with error code : %d", WSAGetLastError());
+								closesocket(client_s);
+								free(name);
+								free(otherPlayerMove);
+								free(gameStatus);
+								free(buffer);
+								return 1;
+							}
+						}
 					}
 				}
+				else {//other player's turn
+					printf("%s's turn!\n", name);
+				}
+				break;
+			case GAME_VIEW:
+				printf("%s move was %s\n%s", name, otherPlayerMove, gameStatus);
+				break;
+			case GAME_ENDED:
+				printf("%s won!\n", name);
+				gameStruct.gameEnded = 1;
+				break;
+			case SERVER_OPPONENT_QUIT:
+				break;
 			}
-			break;
-		case GAME_VIEW:
-			break;
-		case GAME_ENDED:
-			gameStruct.gameEnded = 1;
-			break;
-		case SERVER_OPPONENT_QUIT:
-			break;
 		}
+		free(received);
+		received = NULL;
 	}
+	free(name);
+	free(otherPlayerMove);
+	free(gameStatus);
+	return 0;
 }
 /* {
 	char* recieved = NULL, * input = NULL, * buffer = NULL;
@@ -505,7 +504,7 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	// Connect to a server.
+
 
 	//Create a sockaddr_in object client_addr and set values.
 	struct sockaddr_in server_addr;
@@ -515,38 +514,58 @@ int main(int argc, char* argv[])
 	int client_addr_len = sizeof(server_addr);
 
 	char* buffer, * recieved = NULL, input[10] = { 0 };
+	struct timeval timeout;
+	int Rec, type;
 
 	// Call the connect function, passing the created socket and the sockaddr_in structure as parameters. 
 	// Check for general errors.
 	//loop
-	while (1) {
-		if (connect(client_s, (SOCKADDR*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
+	while (1) {		//try to connect to server
+		if (connect(client_s, (SOCKADDR*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
+		{
 			printf("Failed to connect to server on %s:%s.\nChoose what to do next:\n1. Try to reconnect\n2. Exit", argv[1], argv[2]);
+		get_input:
 			gets(input);
-			WSACleanup();
-			return 1;
+			if (!strcmp(input, "1"))
+				continue;
+			if (!strcmp(input, "2"))
+				break;
+			else
+			{
+				printf("Error: illegal command\n");
+				goto get_input;
+			}
 		}
 		printf("Connected to server on %s:%s.\n", argv[1], argv[2]);
 		// Setup timeval variable and fd_set variable
-		struct timeval timeout;
-		timeout.tv_sec = 0;
-		timeout.tv_usec = 0.5;
+		timeout.tv_sec = 15;
+		timeout.tv_usec = 0;
 
 		struct fd_set fds;
 		//CLIENT_REQUEST
 		buffer = PrepareMessage(CLIENT_REQUEST, argv[3]);
 		Sleep(1000);
 		SendString(buffer, client_s);
-		int Rec = RecvDataThread(&recieved);
-		if (Rec == TRNS_SUCCEEDED) {
-			if (!strcmp(recieved, "SERVER_DENIED\n")) {
+
+		free(recieved);
+		recieved = NULL; //// ------------------------------------ make sure all "received" are free
+		Rec = RecvDataThread(&recieved);
+		if (Rec == TRNS_SUCCEEDED)
+		{
+			if (!strcmp(recieved, "SERVER_DENIED\n"))
+			{
+			get_input2:
 				printf("Server on %s:%s denied the connection request.\nChoose what to do next:\n1. Try to reconnect\n2. Exit\n", argv[1], argv[2]);
 				// if input is 1, Try to connect again
-				if (gets(input)) {
+				if (!strcmp(input, "1")) {
 					continue;
 				}
-				else {
-					//EXIT
+				if (!strcmp(input, "2"))
+					break;
+				else
+				{
+					printf("Error: illegal command\n");
+					goto get_input2;
 				}
 			}
 			else if (!strcmp(recieved, "SERVER_APPROVED\n"))
@@ -559,38 +578,78 @@ int main(int argc, char* argv[])
 			break;
 		}
 	}
+	//we are now connected to the server
 
+	// MAIN MENU
+	free(recieved);
+	recieved = NULL;
+	Rec = RecvDataThread(&recieved);
+	if (Rec == TRNS_SUCCEEDED)
+	{
+		if (transMessageToInt(recieved, NULL, NULL, NULL) == SERVER_MAIN_MENU)
+		{
+			printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
+			gets(input);
+			while (strcmp(input, "2") && strcmp(input, "1"))
+			{
+				printf("Error: Illegal command\n");
+				printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
+				gets(input);
+			}
+			//CLIENT_VERSUS
+			if (!strcmp(input, "1"))
+			{
+				buffer = PrepareMessage(CLIENT_VERSUS, NULL);
+				if (SendString(buffer, client_s) != TRNS_SUCCEEDED) {
+					printf("Failed to send Server approved");
+				}
+			}
+			//DISCONNECT_CLIENT 
+			if (!strcmp(input, "2"))
+			{
+				buffer = PrepareMessage(CLIENT_DISCONNECT, NULL);
+				if (SendString(buffer, client_s) != TRNS_SUCCEEDED) {
+					printf("sendto() failed with error code : %d", WSAGetLastError());
+					closesocket(client_s);
+					free(buffer);
+					return 1;
+				}
+				Sleep(1000);
+				closesocket(client_s);
+			}
+		}
+	}
+
+	// CLIENT_VERSUS was chosen
+	Rec = RecvDataThread(&recieved);
+	if (Rec == TRNS_SUCCEEDED)
+	{
+		if ((type=transMessageToInt(recieved, NULL, NULL, NULL)) == GAME_STARTED)
+		{
+			PlayGame();
+		}
+		if (type == SERVER_NO_OPPONENTS)
+		{
+			////////////////			take care!!!!
+		}
+	}
+
+	result = WSACleanup();
+	if (result != 0) {
+		printf("WSACleanup failed: %d\n", result);
+		return 1;
+	}
+	//free(buffer);
+	//free(recieved);
+	return 0;
+}
+/*
 	// GAME LOOP:
 	while (1)
 	{
-		while (strcmp(input, "2") && strcmp(input, "1"))
-		{
-			printf("Error: Illegal command\n");
-			printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
-			gets(input);
-		}
 
-		//CLIENT_VERSUS
-		if (!strcmp(input, "1"))
-		{
-			buffer = PrepareMessage(CLIENT_VERSUS, NULL);
-			if (SendString(buffer, client_s) != TRNS_SUCCEEDED) {
-				printf("Failed to send Server approved");
-			}
-		}
-		//DISCONNECT_CLIENT
-		if (!strcmp(input, "2"))
-		{
-			buffer = PrepareMessage(CLIENT_DISCONNECT, NULL);
-			if (SendString(buffer, client_s) != TRNS_SUCCEEDED) {
-				printf("sendto() failed with error code : %d", WSAGetLastError());
-				closesocket(client_s);
-				free(buffer);
-				return 1;
-			}
-			Sleep(1000);
-			closesocket(client_s);
-		}
+		
+		
 		//recv GAME_STARTED
 		free(recieved);
 		recieved = NULL;
@@ -627,4 +686,4 @@ int main(int argc, char* argv[])
 		//free(recieved);
 		return 0;
 	}
-}
+}*/

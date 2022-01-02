@@ -409,62 +409,19 @@ int getArgsFromMessage(char* message, char** arg1, char** arg2, char** arg3)
 	mType[i] = '\0';
 	*temp = '\0';
 	//strcpy(mType, message);
-
-	if (!strcmp(mType, "GAME_ENDED"))
-	{
-		temp1 = strchr(temp + 1, ';');
-		if(temp1 != NULL)
-			*temp1 = '\0';
-		strcpy(*arg1, temp+1);
-		return GAME_ENDED;
-	}
-	if (!strcmp(mType, "TURN_SWITCH")) {
-		temp1 = strchr(temp + 1, ';');
-		if(temp1 != NULL)
-			*temp1 = '\0';
-		strcpy(*arg1, temp + 1);
-		return TURN_SWITCH;
-	}
-	if (!strcmp(mType, "GAME_VIEW")) 
-	{	
-		temp1 = strchr(temp + 1, ';');
-		*temp1 = '\0';
-		strcpy(*arg1, temp + 1);
-		temp = temp1 + 1;
-		temp1 = strchr(temp, ';');
-		*temp1 = '\0';
-		strcpy(*arg2, temp);
-		temp = temp1 + 1;
-		temp1 = strchr(temp, ';');
-		if(temp1!= NULL)
-			*temp1 = '\0';
-		strcpy(*arg3, temp);
-		return GAME_VIEW;
-	}
+	
 	if (!strcmp(mType, "CLIENT_PLAYER_MOVE")) {
-		temp++;
-		i = 0;
-		while (temp != NULL && *temp != '\n')
-		{
-			//strcpy(*arg1, temp);
-			//*arg1 = temp;    
-			arg1[i] = *temp;                          //////////// DOESNT WORK!!!!!
-			temp++;
-			i++;
-		}
-		//*temp = '\0';
-
-		//strcpy(*arg1,temp1);
-		//temp1 = strrchr(temp + 1, "\\");
-		//*temp1 = '\0';
-		//strcpy(*arg1, temp + 1);
+		temp1 = strchr(temp + 1, ';');
+		if (temp1 != NULL)
+			*temp1 = '\0';
+		strcpy(*arg1, temp + 1);
 		return CLIENT_PLAYER_MOVE;
 	}
 }
 
 DWORD WINAPI threadExecute(SOCKET *client_s) {
 	
-	char *send ,* recieved =NULL;
+	char* send, * recieved = NULL;
 	int Rec, Game_Ended_flag = 0;
 	send = PrepareMessage(SERVER_APPROVED, NULL,NULL,NULL);
 	if (SendString(send, *client_s) !=TRNS_SUCCEEDED) {
@@ -472,20 +429,29 @@ DWORD WINAPI threadExecute(SOCKET *client_s) {
 	}
 	free(send);
 	send = NULL;
-	//
-	// RECV CLIENT_VERSUS
-	
-	Sleep(1000);
 
+	//send MAIN MENU
+	send = PrepareMessage(SERVER_MAIN_MENU, NULL, NULL, NULL);
+	if (SendString(send, *client_s) != TRNS_SUCCEEDED) {
+		printf("Failed to send Server approved");
+	}
+	free(send);
+	send = NULL;
+
+	// RECV CLIENT_VERSUS
+	free(recieved);
+	recieved = NULL;
 	Rec = RecvDataThread(&recieved, *client_s);   
 	if (Rec == TRNS_SUCCEEDED) {
-		if (!strcmp(recieved, "CLIENT_VERSUS\n")) {
+		if (!strcmp(recieved, "CLIENT_VERSUS\n")) 
+		{
 			free(recieved);
 			recieved = NULL;
 			send = PrepareMessage(GAME_STARTED, NULL, NULL, NULL);
 			SendString(send, *client_s);
 			free(send);
 			send = NULL;
+			//Sleep(5000);
 			//TURN_SWITCH
 			send = PrepareMessage(TURN_SWITCH, "Philip",NULL,NULL); /////////// for now Parameter is Pseudo 
 			SendString(send, *client_s);
@@ -577,6 +543,11 @@ int main(int argc, char* argv[])
 	struct timeval timeout;
 	struct fd_set fds;
 
+	HANDLE Threads[2];
+	DWORD threadIDs[10];
+	int openedsuccessfuly[2];
+	int type;
+
 	timeout.tv_sec = 13;
 	timeout.tv_usec = 0;
 
@@ -597,9 +568,6 @@ int main(int argc, char* argv[])
 		printf("Accepting connection with client failed, error %ld\n", WSAGetLastError());
 		//goto server_cleanup_3;
 	}
-	HANDLE Threads[2];
-	DWORD threadIDs[10];
-	int openedsuccessfuly[2];
 	while (1)
 	{ // &client_addr
 	
@@ -628,6 +596,7 @@ int main(int argc, char* argv[])
 				if (Rec != TRNS_SUCCEEDED) {
 					return 1;
 				}
+				//type = getArgsFromMessage(received, ) --------------------------------------------------------------
 			///// CHECK IF THERE ARE NO MORE THN 2 THREADS OR DENY
 				if (openThread(&((Threads)[0]), &threadExecute, &client_s , &(threadIDs[0])))
 				{
