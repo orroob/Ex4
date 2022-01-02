@@ -24,12 +24,18 @@
     <ClCompile Include="main.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\Desktop\EX3\EX3\ProcessHandling.c">
-      <Filter>Resource Files</Filter>
+    <ClCompile Include="FileHandling.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ProcessHandling.c">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\..\Desktop\EX3\EX3\ProcessHandling.h">
+    <ClInclude Include="ProcessHandling.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="HardCodedData.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

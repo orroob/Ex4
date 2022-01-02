@@ -141,11 +141,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\..\Desktop\EX3\EX3\ProcessHandling.c" />
+    <ClCompile Include="FileHandling.c" />
     <ClCompile Include="main.c" />
+    <ClCompile Include="ProcessHandling.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\..\Desktop\EX3\EX3\ProcessHandling.h" />
+    <ClInclude Include="HardCodedData.h" />
+    <ClInclude Include="ProcessHandling.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

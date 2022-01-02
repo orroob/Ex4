@@ -37,8 +37,17 @@
 #define TRNS_TIMEOUT 3
 #define TIME_OUT_ERROR 0
 
+typedef struct Game_STATUS
+{
+	char* clientName;
+	char* lastMove;
+	int gameEnded;
+}GAME;
 
+GAME gameStruct;
 SOCKET client_s;
+char clientName[20];
+
 int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
 {
 	const char* CurPlacePtr = Buffer;
@@ -93,31 +102,59 @@ int SendString(const char* Str, SOCKET sd)
 
 	return SendRes;
 }
-int getArgsFromMessage(char* message, char arg1)
+
+int getArgsFromMessage(char* message, char **arg1, char** arg2, char** arg3)
 {
 	char mType[20] = { 0 };
-	char *temp = message;
+	int i = 0;
+	char* temp = message, * temp1;
 	while (temp != NULL && *temp != ':')
 	{
+		mType[i] = *temp;
 		temp++;
+		i++;
 	}
 	if (temp == NULL)
 		return -1;
-
+	mType[i] = '\0';
 	*temp = '\0';
-	strcpy(mType, message);
+	//strcpy(mType, message);
 
 	if (!strcmp(mType, "GAME_ENDED"))
 	{
-
+		temp1 = strchr(temp + 1, ';');
+		if (temp1 != NULL)
+			*temp1 = '\0';
+		strcpy(*arg1, temp + 1);
 		return GAME_ENDED;
 	}
-	if (!strcmp(mType, "TURN_SWITCH"))
+	if (!strcmp(mType, "TURN_SWITCH")) {
+		temp1 = strchr(temp + 1, ';');
+		if (temp1 != NULL)
+			*temp1 = '\0';
+		strcpy(*arg1, temp + 1);
 		return TURN_SWITCH;
+	}
 	if (!strcmp(mType, "GAME_VIEW"))
+	{
+		temp1 = strchr(temp + 1, ';');
+		*temp1 = '\0';
+		strcpy(*arg1, temp + 1);
+		temp = temp1 + 1;
+		temp1 = strchr(temp, ';');
+		*temp1 = '\0';
+		strcpy(*arg2, temp);
+		temp = temp1 + 1;
+		temp1 = strchr(temp, ';');
+		if (temp1 != NULL)
+			*temp1 = '\0';
+		strcpy(*arg3, temp);
 		return GAME_VIEW;
+	}
+	return -1;
 }
-int transMessageToInt(char* message)
+
+int transMessageToInt(char* message, char** arg1, char** arg2, char** arg3)
 {
 	if (!strcmp(message, "SERVER_APPROVED"))
 		return SERVER_APPROVED;
@@ -134,7 +171,9 @@ int transMessageToInt(char* message)
 	if (!strcmp(message, "CLIENT_PLAYER_MOVE"))
 		return CLIENT_PLAYER_MOVE;
 	//with arguments:
+	return getArgsFromMessage(message, arg1, arg2, arg3);
 }
+
 int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 {
 	char* CurPlacePtr = OutputBuffer;
@@ -163,6 +202,7 @@ int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 
 	return TRNS_SUCCEEDED;
 }
+
 int ReceiveString(char** OutputStrPtr, SOCKET sd)
 {
 	/* Recv the the request to the server on socket sd */
@@ -210,6 +250,7 @@ int ReceiveString(char** OutputStrPtr, SOCKET sd)
 
 	return RecvRes;
 }
+
 int RecvDataThread(char** AcceptedStr)
 {
 	int RecvRes;
@@ -248,6 +289,7 @@ int RecvDataThread(char** AcceptedStr)
 		//free(AcceptedStr);
 		//return 0;
 }
+
 char* PrepareMessage(int messageType, char* arg1)
 {
 	
@@ -309,13 +351,13 @@ char* PrepareMessage(int messageType, char* arg1)
 	}
 	return buffer;
 }
-int Play_Game() {
+
+int GetDecodedMessage() {
 	int Rec, type;
 	char* recieved=NULL;
 	Rec = RecvDataThread(&recieved);
 	if (Rec == TRNS_SUCCEEDED) {
 
-		type = transMessageToInt(recieved);
 		switch (type)
 		{
 		case GAME_STARTED:
@@ -339,6 +381,111 @@ int Play_Game() {
 }
 
 
+int PlayGame()
+{
+	char* received = NULL, * input = NULL, * buffer = NULL;
+	int Rec, type;
+	char* name, * otherPlayerMove, * gameStatus;
+	name = malloc(20 * sizeof(char));
+	otherPlayerMove = malloc(20 * sizeof(char));
+	gameStatus = malloc(20 * sizeof(char));
+
+	while(!gameStruct.gameEnded)
+	Rec = RecvDataThread(&received);
+	if (Rec == TRNS_SUCCEEDED)
+	{
+		type = transMessageToInt(received, &name, &otherPlayerMove, &gameStatus);
+		switch (type)
+		{
+		case TURN_SWITCH:
+			if (!strcmp(name, clientName))
+			{//our turn 
+				Rec = RecvDataThread(&received);
+				if (Rec == TRNS_SUCCEEDED)
+				{
+					type = transMessageToInt(received, &name, &otherPlayerMove, &gameStatus);
+					if (type == SERVER_MOVE_REQUEST)
+					{
+						//send (gets -> sendbuffer)
+					}
+				}
+			}
+			break;
+		case GAME_VIEW:
+			break;
+		case GAME_ENDED:
+			gameStruct.gameEnded = 1;
+			break;
+		case SERVER_OPPONENT_QUIT:
+			break;
+		}
+	}
+}
+/* {
+	char* recieved = NULL, * input = NULL, * buffer = NULL;
+	int Rec;
+	// play game:
+	while (1)
+	{
+		//recv TURN_SWITCH
+		Rec = RecvDataThread(&recieved);
+		if (Rec == TRNS_SUCCEEDED) {
+
+			if (!strcmp(recieved, "TURN_SWITCH:Philip\n")) { ////TEMPORARY
+				free(recieved);
+				recieved = NULL;
+				//SERVER_MOVE_REQUEST
+				Rec = RecvDataThread(&recieved);
+			}
+			else if (!strcmp(recieved, "TURN_SWITCH:%s\n", "Other Player Name")) {
+				//GAME_VIEW wait 
+				free(recieved);
+				recieved = NULL;
+				Rec = RecvDataThread(&recieved);
+				if (Rec == TRNS_SUCCEEDED) {
+					//	if (!strcmp(recieved, "GAME_VIEW\n")) {/////////////////////// ARGUMENTS
+					//	}
+				}
+				// wait for another turn switch
+			}
+			if (Rec == TRNS_SUCCEEDED) {
+				if (!strcmp(recieved, "SERVER_MOVE_REQUEST\n")) {
+					printf("Enter the next number or boom:\n");
+					gets(input);
+					buffer = PrepareMessage(CLIENT_PLAYER_MOVE, input);
+					if (SendString(buffer, client_s) != TRNS_SUCCEEDED) {
+						printf("sendto() failed with error code : %d", WSAGetLastError());
+						closesocket(client_s);
+						free(buffer);
+						return 1;
+					}
+				}
+			}
+			free(recieved);
+			recieved = NULL;
+			// RECV GAME_VIEW
+			Rec = RecvDataThread(&recieved);
+			if (Rec == TRNS_SUCCEEDED) {
+				if (!strcmp(recieved, "GAME_VIEW:%s;%s;%s\n", "Other player", "Move", "CONT\DONE")) {
+					if (1) {
+						//if  not done
+						if (1) {
+							continue;
+						}
+						else {
+							//finish game 
+							return 1;//
+						}
+					}
+
+				}
+			}
+
+		}
+	}
+}
+
+*/
 int main(int argc, char* argv[])
 {
 	// Initialize Winsock
@@ -351,7 +498,7 @@ int main(int argc, char* argv[])
 	}
 
 	// Create and init socket
-	
+
 	if ((client_s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == INVALID_SOCKET)
 	{
 		printf("Could not create socket : %d", WSAGetLastError());
@@ -367,7 +514,7 @@ int main(int argc, char* argv[])
 	server_addr.sin_addr.s_addr = inet_addr(argv[1]);		// IP address
 	int client_addr_len = sizeof(server_addr);
 
-	char *buffer, *recieved =NULL , input[10] = { 0 };
+	char* buffer, * recieved = NULL, input[10] = { 0 };
 
 	// Call the connect function, passing the created socket and the sockaddr_in structure as parameters. 
 	// Check for general errors.
@@ -412,8 +559,8 @@ int main(int argc, char* argv[])
 			break;
 		}
 	}
-	
-	// LOOP:
+
+	// GAME LOOP:
 	while (1)
 	{
 		while (strcmp(input, "2") && strcmp(input, "1"))
@@ -422,7 +569,7 @@ int main(int argc, char* argv[])
 			printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
 			gets(input);
 		}
-	
+
 		//CLIENT_VERSUS
 		if (!strcmp(input, "1"))
 		{
@@ -456,92 +603,28 @@ int main(int argc, char* argv[])
 				printf("ERROR\n");
 			}
 		}
-		while (1)
-		{
-		//recv TURN_SWITCH
-			free(recieved);
-			recieved = NULL;
-			Rec = RecvDataThread(&recieved);
-			if (Rec == TRNS_SUCCEEDED) {
 
-				if (!strcmp(recieved, "TURN_SWITCH:Philip\n")) { ////TEMPORARY
-					free(recieved);
-					recieved = NULL;
-					//SERVER_MOVE_REQUEST
-					Rec = RecvDataThread(&recieved);
-				}
-				else if (!strcmp(recieved, "TURN_SWITCH:%s\n", "Other Player Name")) {
-					//GAME_VIEW wait 
-					free(recieved);
-					recieved = NULL;
-					Rec = RecvDataThread(&recieved);
-					if (Rec == TRNS_SUCCEEDED) {
-					//	if (!strcmp(recieved, "GAME_VIEW\n")) {/////////////////////// ARGUMENTS
-					//	}
-					}
-					// wait for another turn switch
-				}
-					if (Rec == TRNS_SUCCEEDED) {
-						if (!strcmp(recieved, "SERVER_MOVE_REQUEST\n")) {
-							printf("Enter the next number or boom:\n");
-							gets(input);
-							buffer = PrepareMessage(CLIENT_PLAYER_MOVE, input);
-							if (SendString(buffer, client_s) != TRNS_SUCCEEDED) {
-								printf("sendto() failed with error code : %d", WSAGetLastError());
-								closesocket(client_s);
-								free(buffer);
-								return 1;
-											}
+		//VERSUS_CLIENT / DISCONNECT_CLIENT
+		//recv STARTED_GAME
+		// loop:
+		//recv SWITCH_TURN
+		//**wait until** recv REQUEST_MOVE_SERVER
+		//CLIENT_PLAYER_MOVE
+		//recv GAME_VIEW
+		//end loop
+		// recv ENDED_GAME
+		//end LOOP
 
-									}
-							}
-	
-				free(recieved);
-				recieved = NULL;
-				// RECV GAME_VIEW
-				Rec = RecvDataThread(&recieved);
-				if (Rec == TRNS_SUCCEEDED) {
-					if (!strcmp(recieved, "GAME_VIEW:%s;%s;%s\n","Other player", "Move", "CONT\DONE")) {
-					if(1){
-						//if  not done
-						if (1) {
-							continue;
-						}
-						else{
 
-							//finish game 
-							return 1;//
-						}
-					}
-
-				}
-			}
-
+		printf("Success");
+		// Deinitialize Winsock
+		result = WSACleanup();
+		if (result != 0) {
+			printf("WSACleanup failed: %d\n", result);
+			return 1;
 		}
+		free(buffer);
+		//free(recieved);
+		return 0;
 	}
-	
-	
-
-	//VERSUS_CLIENT / DISCONNECT_CLIENT
-	//recv STARTED_GAME
-	// loop:
-	//recv SWITCH_TURN
-	//**wait until** recv REQUEST_MOVE_SERVER
-	//CLIENT_PLAYER_MOVE
-	//recv GAME_VIEW
-	//end loop
-	// recv ENDED_GAME
-	//end LOOP
-
-
-	printf("Success");
-	// Deinitialize Winsock
-	result = WSACleanup();
-	if (result != 0) {
-		printf("WSACleanup failed: %d\n", result);
-		return 1;
-	}
-	free(buffer);
-	//free(recieved);
-	return 0;
 }

@@ -12,6 +12,9 @@
 #include <stdlib.h> 
 #include <string.h>
 
+#include "ProcessHandling.h"
+#include "HardCodedData.h"
+
 #define SERVER_APPROVED 0
 #define SERVER_DENIED 1
 #define SERVER_MAIN_MENU 2
@@ -59,6 +62,7 @@ int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 
 	return TRNS_SUCCEEDED;
 }
+
 int ReceiveString(char** OutputStrPtr, SOCKET sd)
 {
 	/* Recv the the request to the server on socket sd */
@@ -106,6 +110,7 @@ int ReceiveString(char** OutputStrPtr, SOCKET sd)
 
 	return RecvRes;
 }
+
 int RecvDataThread(char** AcceptedStr, SOCKET client_s)
 {
 	int RecvRes;
@@ -144,6 +149,7 @@ int RecvDataThread(char** AcceptedStr, SOCKET client_s)
 	//free(AcceptedStr);
 	//return 0;
 }
+
 char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 {
 
@@ -160,7 +166,7 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 		{
 			return NULL;
 		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_APPROVED\n", arg1);
+		sprintf_s(buffer, buffSize + 1, "SERVER_APPROVED\n");
 		break;
 
 	case SERVER_DENIED:
@@ -173,7 +179,7 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 		{
 			return NULL;
 		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_DENIED\n", arg1);
+		sprintf_s(buffer, buffSize + 1, "SERVER_DENIED\n");
 		break;
 	case SERVER_MAIN_MENU:
 		if ((buffSize = snprintf(NULL, 0, "SERVER_MAIN_MENU:%s\n", arg1)) == 0) //snprintf returns num of characters
@@ -185,7 +191,7 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 		{
 			return NULL;
 		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_MAIN_MENU\n",arg1);
+		sprintf_s(buffer, buffSize + 1, "SERVER_MAIN_MENU\n");
 		break;
 	case GAME_STARTED:
 		if ((buffSize = snprintf(NULL, 0, "GAME_STARTED\n")) == 0) //snprintf returns num of characters
@@ -197,7 +203,7 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 		{
 			return NULL;
 		}
-		sprintf_s(buffer, buffSize + 1, "GAME_STARTED\n", arg1);
+		sprintf_s(buffer, buffSize + 1, "GAME_STARTED\n");
 		break;
 	case TURN_SWITCH:
 		if ((buffSize = snprintf(NULL, 0, "TURN_SWITCH:%s\n", arg1)) == 0) //snprintf returns num of characters
@@ -280,6 +286,7 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 	}
 	return buffer;
 }
+
 int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
 {
 	const char* CurPlacePtr = Buffer;
@@ -307,6 +314,7 @@ int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
 	return TRNS_SUCCEEDED;
 }
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
+
 int SendString(const char* Str, SOCKET sd)
 {
 	/* Send the the request to the server on socket sd */
@@ -332,6 +340,7 @@ int SendString(const char* Str, SOCKET sd)
 
 	return SendRes;
 }
+
 int containsDigit(int number) // gets str and checks there is no 7 in it or 7 doesnt divide the number
 {
 	while (number != 0)
@@ -350,6 +359,7 @@ int containsDigit(int number) // gets str and checks there is no 7 in it or 7 do
 
 	return 0;
 }
+
 int containsBOOM(char* input) {
 	char BOOM[5] = "boom";
 	if (!strcmp(BOOM, input)) {
@@ -357,6 +367,7 @@ int containsBOOM(char* input) {
 	}
 	return 0;
 }
+
 int LEGAL_MOVE(char* next_move) {
 	//int legal_move = Game_number+1;
 	//if (containsDigit(legal_move)) {
@@ -381,6 +392,7 @@ int LEGAL_MOVE(char* next_move) {
 	printf("FORGOT ssssssss");
 	return 0;
 }
+
 int getArgsFromMessage(char* message, char** arg1, char** arg2, char** arg3)
 {
 	char mType[20] = { 0 };
@@ -395,36 +407,38 @@ int getArgsFromMessage(char* message, char** arg1, char** arg2, char** arg3)
 	if (temp == NULL)
 		return -1;
 	mType[i] = '\0';
-	//*temp = '\0';
+	*temp = '\0';
 	//strcpy(mType, message);
 
 	if (!strcmp(mType, "GAME_ENDED"))
 	{
-		temp1 = strrchr(temp + 1, ";");
-		*temp1 = '\0';
+		temp1 = strchr(temp + 1, ';');
+		if(temp1 != NULL)
+			*temp1 = '\0';
 		strcpy(*arg1, temp+1);
-
 		return GAME_ENDED;
 	}
 	if (!strcmp(mType, "TURN_SWITCH")) {
-		temp1 = strrchr(temp + 1, ";");
-		*temp1 = '\0';
+		temp1 = strchr(temp + 1, ';');
+		if(temp1 != NULL)
+			*temp1 = '\0';
 		strcpy(*arg1, temp + 1);
 		return TURN_SWITCH;
 	}
-	if (!strcmp(mType, "GAME_VIEW")) {
-		
-		temp1 = strrchr(temp + 1, ";");
+	if (!strcmp(mType, "GAME_VIEW")) 
+	{	
+		temp1 = strchr(temp + 1, ';');
 		*temp1 = '\0';
 		strcpy(*arg1, temp + 1);
 		temp = temp1 + 1;
-		temp1 = strrchr(temp, ";");
+		temp1 = strchr(temp, ';');
 		*temp1 = '\0';
-		strcpy(*arg2, temp + 1);
+		strcpy(*arg2, temp);
 		temp = temp1 + 1;
-		temp1 = strrchr(temp, ";");
-		*temp1 = '\0';
-		strcpy(*arg3, temp + 1);
+		temp1 = strchr(temp, ';');
+		if(temp1!= NULL)
+			*temp1 = '\0';
+		strcpy(*arg3, temp);
 		return GAME_VIEW;
 	}
 	if (!strcmp(mType, "CLIENT_PLAYER_MOVE")) {
@@ -447,6 +461,7 @@ int getArgsFromMessage(char* message, char** arg1, char** arg2, char** arg3)
 		return CLIENT_PLAYER_MOVE;
 	}
 }
+
 DWORD WINAPI threadExecute(SOCKET *client_s) {
 	
 	char *send ,* recieved =NULL;
