@@ -465,7 +465,7 @@ DWORD WINAPI threadExecute(SOCKET *client_s) {
 
 			//RECV PLAYER_MOVE_REQUEST
 			
-			Rec = RecvDataThread(&recieved, *client_s); 
+			Rec = RecvDataThread(&recieved, *client_s);  /////////DOESNT WORKKKKKK
 			if (Rec == TRNS_SUCCEEDED) {
 				char next_move[30] = {0};
 				getArgsFromMessage(recieved, &next_move, NULL, NULL);

@@ -48,6 +48,9 @@ GAME gameStruct;
 SOCKET client_s;
 char clientName[20];
 
+
+
+
 int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
 {
 	const char* CurPlacePtr = Buffer;
@@ -133,6 +136,7 @@ int getArgsFromMessage(char* message, char **arg1, char** arg2, char** arg3)
 		if (temp1 != NULL)
 			*temp1 = '\0';
 		strcpy(*arg1, temp + 1);
+		arg1 = '\0';
 		return TURN_SWITCH;
 	}
 	if (!strcmp(mType, "GAME_VIEW"))
@@ -360,8 +364,8 @@ int PlayGame()
 	name = malloc(20 * sizeof(char));
 	otherPlayerMove = malloc(20 * sizeof(char));
 	gameStatus = malloc(20 * sizeof(char));
-
-	while (!gameStruct.gameEnded)
+	//gameStruct.clientName = argv[3];
+		while (!gameStruct.gameEnded)
 	{
 		Rec = RecvDataThread(&received);
 		if (Rec == TRNS_SUCCEEDED)
@@ -370,7 +374,7 @@ int PlayGame()
 			switch (type)
 			{
 			case TURN_SWITCH:
-				if (!strcmp(name, clientName))
+				if (!strcmp(name, "%s\n", gameStruct.clientName))     //////////////////////// problem!!! philip\n != philip
 				{//our turn 
 					printf("Your turn!\n");
 					free(received);
@@ -487,6 +491,9 @@ int PlayGame()
 */
 int main(int argc, char* argv[])
 {
+	gameStruct.clientName = argv[3];
+	char ch = '\n';
+	strncat(gameStruct.clientName, &ch, 1); /////////               append \n to name for strcmp with name 
 	// Initialize Winsock
 	WSADATA wsa_data;
 	int result;
@@ -523,7 +530,7 @@ int main(int argc, char* argv[])
 	while (1) {		//try to connect to server
 		if (connect(client_s, (SOCKADDR*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
 		{
-			printf("Failed to connect to server on %s:%s.\nChoose what to do next:\n1. Try to reconnect\n2. Exit", argv[1], argv[2]);
+			printf("Failed to connect to server on %s:%s.\nChoose what to do next:\n1. Try to reconnect\n2. Exit\n", argv[1], argv[2]);
 		get_input:
 			gets(input);
 			if (!strcmp(input, "1"))
@@ -570,8 +577,8 @@ int main(int argc, char* argv[])
 			}
 			else if (!strcmp(recieved, "SERVER_APPROVED\n"))
 			{
-				printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
-				gets(input);
+				//printf("Choose what to do next:\n1. Play against another client\n2. Quit\n"); //////////////////////
+				//gets(input);
 
 				//Take in considiration Quiting
 			}
@@ -583,6 +590,7 @@ int main(int argc, char* argv[])
 	// MAIN MENU
 	free(recieved);
 	recieved = NULL;
+	//RECV MAIN MENU
 	Rec = RecvDataThread(&recieved);
 	if (Rec == TRNS_SUCCEEDED)
 	{
@@ -621,10 +629,12 @@ int main(int argc, char* argv[])
 	}
 
 	// CLIENT_VERSUS was chosen
-	Rec = RecvDataThread(&recieved);
+	free(recieved);
+	recieved = NULL;
+	Rec = RecvDataThread(&recieved);     
 	if (Rec == TRNS_SUCCEEDED)
 	{
-		if ((type=transMessageToInt(recieved, NULL, NULL, NULL)) == GAME_STARTED)
+		if ((type=transMessageToInt(recieved, NULL, NULL, NULL)) == GAME_STARTED) //DOESMT WORK
 		{
 			PlayGame();
 		}
