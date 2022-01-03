@@ -15,6 +15,7 @@
 #include "ProcessHandling.h"
 #include "HardCodedData.h"
 
+//server messages
 #define SERVER_APPROVED 0
 #define SERVER_DENIED 1
 #define SERVER_MAIN_MENU 2
@@ -26,14 +27,28 @@
 #define GAME_VIEW 8
 #define SERVER_OPPONENT_QUIT 9 
 
+//client messages
+#define CLIENT_REQUEST 0
+#define CLIENT_VERSUS 1
+#define CLIENT_PLAYER_MOVE 2
+#define CLIENT_DISCONNECT 3
+
 //receive options
 #define TRNS_FAILED 0
 #define TRNS_DISCONNECTED 1
 #define TRNS_SUCCEEDED 2
 #define TRNS_TIMEOUT 3
 #define TIME_OUT_ERROR 0
-#define CLIENT_PLAYER_MOVE 2 
-int Game_number =0;
+
+typedef struct Game
+{
+	char* players[3]; //max: two players playing + one player being denied
+	int Game_number;
+	int game_ended;
+}Game;
+
+Game game_state = { 0 };
+
 int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 {
 	char* CurPlacePtr = OutputBuffer;
@@ -125,7 +140,7 @@ int RecvDataThread(char** AcceptedStr, SOCKET client_s)
 	}
 	else if (RecvRes == TRNS_DISCONNECTED)
 	{
-		printf("Server closed connection. Bye!\n");
+		printf("Server closed connection. Bye!\n");    /////MAKES INFINITE LOOOP
 		return TRNS_DISCONNECTED;
 		//return 0x555;
 	}
@@ -375,16 +390,16 @@ int LEGAL_MOVE(char* next_move) {
 	//}
 	//return legal_move;
 	if (containsBOOM(next_move)) {
-		if (containsDigit(Game_number +1)) {
+		if (containsDigit(game_state.Game_number +1)) {// add mutex to protect shared structure - game_status
 			return 1;
 		}
 		return 0;
 	}
 	else {
-		if (containsDigit(Game_number + 1)) {
+		if (containsDigit(game_state.Game_number + 1)) { // add mutex to protect shared structure - game_status
 			return 0;
 		}
-		if (atoi(next_move) == Game_number + 1) {
+		if (atoi(next_move) == game_state.Game_number + 1) {// add mutex to protect shared structure - game_status
 			return 1;
 		}
 		
@@ -393,7 +408,7 @@ int LEGAL_MOVE(char* next_move) {
 	return 0;
 }
 
-int getArgsFromMessage(char* message, char** arg1, char** arg2, char** arg3)
+int getArgsFromMessage(char* message, char** arg1)
 {
 	char mType[20] = { 0 };
 	int i = 0; 
@@ -408,15 +423,30 @@ int getArgsFromMessage(char* message, char** arg1, char** arg2, char** arg3)
 		return -1;
 	mType[i] = '\0';
 	*temp = '\0';
-	//strcpy(mType, message);
-	
+	if (!strcmp(mType, "CLIENT_REQUEST")) {
+		temp1 = strchr(temp + 1, ';');
+		if (temp1 != NULL)
+			*temp1 = '\0';
+		strcpy(*arg1, temp + 1);    ////////////
+		return CLIENT_REQUEST;
+	}
 	if (!strcmp(mType, "CLIENT_PLAYER_MOVE")) {
 		temp1 = strchr(temp + 1, ';');
 		if (temp1 != NULL)
 			*temp1 = '\0';
-		strcpy(*arg1, temp + 1);
+		strcpy(*arg1, temp + 1);    //////////// WORKed AFTER I USED MALLOC FOR NEXT_MOVE  NEED TO FREE
 		return CLIENT_PLAYER_MOVE;
 	}
+}
+
+int transMessageToInt(char* message, char** arg1, char** arg2, char** arg3)
+{
+	if (!strcmp(message, "CLIENT_VERSUS\n"))
+		return CLIENT_VERSUS;
+	if (!strcmp(message, "CLIENT_DISCONNECT\n"))
+		return CLIENT_DISCONNECT;
+	//with arguments:
+	return getArgsFromMessage(message, arg1, arg2, arg3);
 }
 
 DWORD WINAPI threadExecute(SOCKET *client_s) {
@@ -465,13 +495,15 @@ DWORD WINAPI threadExecute(SOCKET *client_s) {
 
 			//RECV PLAYER_MOVE_REQUEST
 			
-			Rec = RecvDataThread(&recieved, *client_s);  /////////DOESNT WORKKKKKK
+			Rec = RecvDataThread(&recieved, *client_s);  /////////works (: !
 			if (Rec == TRNS_SUCCEEDED) {
-				char next_move[30] = {0};
+				//char next_move[30] = {0};  /////DIDNT WORK
+				char* next_move;
+				next_move = malloc(20 * sizeof(char));           ////////NEED TO FREE 
 				getArgsFromMessage(recieved, &next_move, NULL, NULL);
 				if (LEGAL_MOVE(next_move)) {
 					//////SEND mESsAGE TO OTHER PLAYER
-
+					game_state.Game_number++;
 				}
 
 				else {

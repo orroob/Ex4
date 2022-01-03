@@ -111,7 +111,7 @@ int getArgsFromMessage(char* message, char **arg1, char** arg2, char** arg3)
 	char mType[20] = { 0 };
 	int i = 0;
 	char* temp = message, * temp1;
-	while (temp != NULL && *temp != ':')
+	while (temp != NULL && *temp != ':')          /////////DOESNT WORK FOR MOVE_REQUEST INFINITE LOOP
 	{
 		mType[i] = *temp;
 		temp++;
@@ -136,7 +136,7 @@ int getArgsFromMessage(char* message, char **arg1, char** arg2, char** arg3)
 		if (temp1 != NULL)
 			*temp1 = '\0';
 		strcpy(*arg1, temp + 1);
-		arg1 = '\0';
+		//arg1 = '\0';               ///////////////////////////////////
 		return TURN_SWITCH;
 	}
 	if (!strcmp(mType, "GAME_VIEW"))
@@ -168,12 +168,10 @@ int transMessageToInt(char* message, char** arg1, char** arg2, char** arg3)
 		return SERVER_MAIN_MENU;
 	if (!strcmp(message, "GAME_STARTED\n"))
 		return GAME_STARTED;
-	if (!strcmp(message, "SERVER_MOVE_REQUEST"))
+	if (!strcmp(message, "SERVER_MOVE_REQUEST\n"))
 		return SERVER_MOVE_REQUEST;
-	if (!strcmp(message, "SERVER_OPPONENT_QUIT"))
+	if (!strcmp(message, "SERVER_OPPONENT_QUIT\n"))
 		return SERVER_OPPONENT_QUIT;
-	if (!strcmp(message, "CLIENT_PLAYER_MOVE"))
-		return CLIENT_PLAYER_MOVE;
 	//with arguments:
 	return getArgsFromMessage(message, arg1, arg2, arg3);
 }
@@ -358,15 +356,16 @@ char* PrepareMessage(int messageType, char* arg1)
 
 int PlayGame()
 {
-	char* received = NULL, * input = NULL, * buffer = NULL;
+	char* received = NULL, * buffer = NULL;
+	char input[10] = { 0 };
 	int Rec, type;
 	char* name, * otherPlayerMove, * gameStatus;
 	name = malloc(20 * sizeof(char));
 	otherPlayerMove = malloc(20 * sizeof(char));
 	gameStatus = malloc(20 * sizeof(char));
-	//gameStruct.clientName = argv[3];
 		while (!gameStruct.gameEnded)
 	{
+			//TRUN_SWITCH
 		Rec = RecvDataThread(&received);
 		if (Rec == TRNS_SUCCEEDED)
 		{
@@ -374,19 +373,20 @@ int PlayGame()
 			switch (type)
 			{
 			case TURN_SWITCH:
-				if (!strcmp(name, "%s\n", gameStruct.clientName))     //////////////////////// problem!!! philip\n != philip
+				if (!strcmp(name, gameStruct.clientName))     //////////////////////// problem!!! philip\n != philip ???????
 				{//our turn 
 					printf("Your turn!\n");
 					free(received);
 					received = NULL;
+					//SERVER_MOVE_REQUEST
 					Rec = RecvDataThread(&received);
 					if (Rec == TRNS_SUCCEEDED)
 					{
-						type = transMessageToInt(received, &name, &otherPlayerMove, &gameStatus);
+						type = transMessageToInt(received, NULL, NULL , NULL);       
 						if (type == SERVER_MOVE_REQUEST)
 						{
 							printf("Enter the next number or boom:\n");
-							gets(input);
+							gets(input);                                            
 							buffer = PrepareMessage(CLIENT_PLAYER_MOVE, input);
 							if (SendString(buffer, client_s) != TRNS_SUCCEEDED)
 							{
