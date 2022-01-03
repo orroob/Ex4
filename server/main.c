@@ -40,14 +40,19 @@
 #define TRNS_TIMEOUT 3
 #define TIME_OUT_ERROR 0
 
+// general
+#define MAX_SOCKETS 3
 typedef struct Game
 {
-	char* players[3]; //max: two players playing + one player being denied
+	char* players[MAX_SOCKETS]; //max: two players playing + one player being denied
 	int Game_number;
 	int game_ended;
+	int players_num;
 }Game;
 
 Game game_state = { 0 };
+SOCKET allSockets[MAX_SOCKETS];
+int socketCount = 0;
 
 int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 {
@@ -55,9 +60,13 @@ int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 	int BytesJustTransferred;
 	int RemainingBytesToReceive = BytesToReceive;
 	int Last_Error_Value = 0;
+	DWORD timeout = 15000;
+	
 	while (RemainingBytesToReceive > 0)
 	{
 		/* send does not guarantee that the entire message is sent */
+		if (setsockopt(sd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
+			printf("setsockopt failed\n");
 		BytesJustTransferred = recv(sd, CurPlacePtr, RemainingBytesToReceive, 0);
 		if (BytesJustTransferred == SOCKET_ERROR)
 		{
@@ -129,7 +138,6 @@ int ReceiveString(char** OutputStrPtr, SOCKET sd)
 int RecvDataThread(char** AcceptedStr, SOCKET client_s)
 {
 	int RecvRes;
-
 	RecvRes = ReceiveString(AcceptedStr, client_s);
 
 	if (RecvRes == TRNS_FAILED)
@@ -150,24 +158,10 @@ int RecvDataThread(char** AcceptedStr, SOCKET client_s)
 		//return 0x555;
 	}
 	return TRNS_SUCCEEDED;
-	//else if (!strcmp (AcceptedStr,"SERVER_DENIED")) {
-	//	printf("Server on %s:%s denied the connection request.\nChoose what to do next:\n1. Try to reconnect\n2. Exit\n", arg1, arg2);
-	//	return TRNS_SUCCEEDED;
-	//	//return 0x555;
-	//}
-	//else if (!strcmp(AcceptedStr,"SERVER_APPROVED"))
-	//{
-	//	printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
-	//	return TRNS_SUCCEEDED;
-	//}
-
-	//free(AcceptedStr);
-	//return 0;
 }
 
-char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
+char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3) // need to reduce lines------------------
 {
-
 	char* buffer;
 	int buffSize;
 	switch (messageType)
@@ -183,13 +177,11 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 		}
 		sprintf_s(buffer, buffSize + 1, "SERVER_APPROVED\n");
 		break;
-
 	case SERVER_DENIED:
 		if ((buffSize = snprintf(NULL, 0, "SERVER_DENIED\n")) == 0) //snprintf returns num of characters
 		{
 			return NULL;
 		}
-
 		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
 		{
 			return NULL;
@@ -201,7 +193,6 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 		{
 			return NULL;
 		}
-
 		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
 		{
 			return NULL;
@@ -213,7 +204,6 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 		{
 			return NULL;
 		}
-
 		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
 		{
 			return NULL;
@@ -225,7 +215,6 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 		{
 			return NULL;
 		}
-
 		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
 		{
 			return NULL;
@@ -233,57 +222,49 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 		sprintf_s(buffer, buffSize + 1, "TURN_SWITCH:%s\n", arg1);
 		break;
 	case SERVER_MOVE_REQUEST:
-		if ((buffSize = snprintf(NULL, 0, "SERVER_MOVE_REQUEST\n", arg1)) == 0) //snprintf returns num of characters
+		if ((buffSize = snprintf(NULL, 0, "SERVER_MOVE_REQUEST\n")) == 0) //snprintf returns num of characters
 		{
 			return NULL;
 		}
-
 		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
 		{
 			return NULL;
 		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_MOVE_REQUEST\n", arg1);
+		sprintf_s(buffer, buffSize + 1, "SERVER_MOVE_REQUEST\n");
 		break;
-
 	case GAME_ENDED:
 		if ((buffSize = snprintf(NULL, 0, "GAME_ENDED:%s\n", arg1)) == 0) //snprintf returns num of characters
 		{
 			return NULL;
 		}
-
 		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
 		{
 			return NULL;
 		}
-		sprintf_s(buffer, buffSize + 1, "GAME_ENDED:$s\n", arg1);
+		sprintf_s(buffer, buffSize + 1, "GAME_ENDED:%s\n", arg1);
 		break;
-
 	case SERVER_NO_OPPONENTS:
 		if ((buffSize = snprintf(NULL, 0, "SERVER_NO_OPPONENTS\n")) == 0) //snprintf returns num of characters
 		{
 			return NULL;
 		}
-
 		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
 		{
 			return NULL;
 		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_NO_OPPONENTS\n", arg1);
+		sprintf_s(buffer, buffSize + 1, "SERVER_NO_OPPONENTS\n");
 		break;
-
 	case GAME_VIEW:
 		if ((buffSize = snprintf(NULL, 0, "GAME_VIEW:%s;%s;%s\n", arg1, arg2, arg3)) == 0) //snprintf returns num of characters
 		{
 			return NULL;
 		}
-
 		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
 		{
 			return NULL;  
 		}
 		sprintf_s(buffer, buffSize + 1, "GAME_VIEW:%s;%s;%s\n", arg1, arg2, arg3);
 		break;
-
 	case SERVER_OPPONENT_QUIT:
 		if ((buffSize = snprintf(NULL, 0, "SERVER_OPPONENT_QUIT:%s\n", arg1)) == 0) //snprintf returns num of characters
 		{
@@ -294,7 +275,7 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3)
 		{
 			return NULL;
 		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_OPPONENT_QUIT\n", arg1);
+		sprintf_s(buffer, buffSize + 1, "SERVER_OPPONENT_QUIT\n");
 		break;
 	default:
 		buffer = NULL;
@@ -328,10 +309,13 @@ int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
 
 	return TRNS_SUCCEEDED;
 }
-/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 
 int SendString(const char* Str, SOCKET sd)
 {
+	//DWORD timeout = 15;
+	//if (setsockopt(sd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof timeout) < 0)
+	//	printf("setsockopt failed\n");
+
 	/* Send the the request to the server on socket sd */
 	int TotalStringSizeInBytes;
 	int SendRes;
@@ -358,20 +342,19 @@ int SendString(const char* Str, SOCKET sd)
 
 int containsDigit(int number) // gets str and checks there is no 7 in it or 7 doesnt divide the number
 {
+	if (number == 0)
+		return 0;
+	if (number % 7 == 0)
+		return 1;
+	int curr_digit;
 	while (number != 0)
 	{
-		if (number % 7 == 0) {
-			printf("Number contains 7");
-			return 1;
-		}
-		int curr_digit = number % 10;
+		curr_digit = number % 10;
 		if (curr_digit == 7) {
-			printf("Number contains 7");
 			return 1;
 		}
 		number /= 10;
 	}
-
 	return 0;
 }
 
@@ -402,7 +385,6 @@ int LEGAL_MOVE(char* next_move) {
 		if (atoi(next_move) == game_state.Game_number + 1) {// add mutex to protect shared structure - game_status
 			return 1;
 		}
-		
 	}
 	printf("FORGOT ssssssss");
 	return 0;
@@ -439,19 +421,264 @@ int getArgsFromMessage(char* message, char** arg1)
 	}
 }
 
-int transMessageToInt(char* message, char** arg1, char** arg2, char** arg3)
+int transMessageToInt(char* message, char** arg1)
 {
 	if (!strcmp(message, "CLIENT_VERSUS\n"))
 		return CLIENT_VERSUS;
 	if (!strcmp(message, "CLIENT_DISCONNECT\n"))
 		return CLIENT_DISCONNECT;
 	//with arguments:
-	return getArgsFromMessage(message, arg1, arg2, arg3);
+	return getArgsFromMessage(message, arg1);
 }
 
-DWORD WINAPI threadExecute(SOCKET *client_s) {
-	
-	char* send, * recieved = NULL;
+int createAndSendMessage(SOCKET client_s, int messageType, char* arg1, char* arg2, char* arg3)
+{
+	char* send;
+	send = PrepareMessage(messageType, arg1, arg2, arg3);
+	if (SendString(send, client_s) != TRNS_SUCCEEDED) {
+		printf("Failed to send Server approved");
+		return 1;
+	}
+	free(send);
+	return 0;
+}
+
+DWORD WINAPI threadExecute(SOCKET *client_s)
+{
+	Sleep(0);
+	/*
+	struct timeval timeout;
+	timeout.tv_sec = 15;
+	timeout.tv_usec = 0;
+
+	if (setsockopt(*client_s, SOL_SOCKET, SO_RCVTIMEO, &timeout,sizeof timeout) < 0)
+		printf("setsockopt failed\n");
+
+	if (setsockopt(*client_s, SOL_SOCKET, SO_SNDTIMEO, &timeout,sizeof timeout) < 0)
+		printf("setsockopt failed\n");
+	*/
+	func(client_s, game_state.players_num);
+}
+
+int decideTurn()
+{
+	return game_state.Game_number % 2;
+}
+
+int func(SOCKET *client_s, int index)
+{
+	char * received = NULL, *arg;
+	int Rec, type, threadTurn;
+	if ((arg = malloc(20 * sizeof(char))) == NULL)
+		return 1;
+
+	while (!game_state.game_ended)
+	{
+		printf("start iteration\n");
+		Rec = RecvDataThread(&received, *client_s);
+		if (Rec != TRNS_SUCCEEDED) {
+			continue;
+			//free(received);
+			//return 1;
+		}
+		type = transMessageToInt(received, &arg);
+		free(received);
+		received = NULL;
+		switch (type)
+		{
+		case CLIENT_REQUEST:
+			//---------------add mutex before approaching game_state -------------------------------
+			if (game_state.players_num >= 2)
+			{
+				//server denied
+				createAndSendMessage(*client_s, SERVER_DENIED, NULL, NULL, NULL);
+				Sleep(1000);
+				return 0;
+			}
+			//server accepted
+			createAndSendMessage(*client_s, SERVER_APPROVED, NULL, NULL, NULL);
+
+			//add player's name to game struct
+			game_state.players[game_state.players_num] = malloc(20 * sizeof(char));
+			strcpy(game_state.players[index], arg);
+
+			//inc players num 
+			game_state.players_num++;
+
+			//send MAIN MENU
+			createAndSendMessage(*client_s, SERVER_MAIN_MENU, NULL, NULL, NULL);
+			break;
+		case CLIENT_VERSUS:
+			if (game_state.players_num < 2)
+			{
+				createAndSendMessage(*client_s, SERVER_NO_OPPONENTS, NULL, NULL, NULL);
+				createAndSendMessage(*client_s, SERVER_MAIN_MENU, NULL, NULL, NULL);
+				continue;
+			}
+			// --------------- need to add mutex------------------------------------
+			threadTurn = decideTurn();
+			createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL);
+			createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL);
+			// --------------- need to release mutex------------------------------------
+			if(threadTurn == index)
+			{
+				createAndSendMessage(*client_s, SERVER_MOVE_REQUEST, game_state.players[threadTurn], NULL, NULL);
+			}			
+			break;
+		case CLIENT_PLAYER_MOVE:
+			// --------------- need to add mutex------------------------------------
+			if (LEGAL_MOVE(arg))
+			{
+				game_state.Game_number++;
+				createAndSendMessage(allSockets[0], GAME_VIEW, game_state.players[threadTurn], arg, "CONT");
+				createAndSendMessage(allSockets[1], GAME_VIEW, game_state.players[threadTurn], arg, "CONT");
+				
+				createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
+				createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
+				// --------------- need to release mutex------------------------------------
+				continue;
+			}
+			game_state.game_ended = 1;
+			createAndSendMessage(allSockets[0], GAME_VIEW, game_state.players[threadTurn], arg, "END");
+			createAndSendMessage(allSockets[1], GAME_VIEW, game_state.players[threadTurn], arg, "END");
+			
+			createAndSendMessage(allSockets[0], GAME_ENDED, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
+			createAndSendMessage(allSockets[1], GAME_ENDED, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
+			
+			createAndSendMessage(allSockets[0], SERVER_MAIN_MENU, NULL, NULL, NULL);
+			createAndSendMessage(allSockets[1], SERVER_MAIN_MENU, NULL, NULL, NULL);
+			// --------------- need to release mutex------------------------------------
+			break;
+		case CLIENT_DISCONNECT:
+			socketCount--;
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+int main(int argc, char* argv[])
+{
+	WSADATA wsa_data;
+	int result;
+	result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
+	if (result != 0) {
+		printf("WSAStartup failed: %d\n", result);
+		return 1;
+	}
+	// Create and init socket
+	SOCKET server_s;
+	if ((server_s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == INVALID_SOCKET)
+	{
+		printf("Could not create socket : %d", WSAGetLastError());
+		return 1;
+	}
+	struct sockaddr_in server_addr;
+	struct sockaddr_in client_addr;
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(atoi(argv[1]));
+	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	int client_addrss_len, server_addrss_len = sizeof(server_addr);
+
+	//Bind
+	if (bind(server_s, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
+	{
+		printf("Bind failed with error code : %d", WSAGetLastError());
+		exit(EXIT_FAILURE);
+	}
+
+	// Setup timeval variable
+	struct timeval timeout;
+	struct fd_set fds;
+
+	HANDLE Threads[2];
+	DWORD threadIDs[10];
+	int openedsuccessfuly[2];
+	int type;
+
+	timeout.tv_sec = 13;
+	timeout.tv_usec = 0;
+
+	int retval, received = 0;
+	//char buffer[3] = { 0 };
+
+	//wait for data to be sent by the channel
+	int ListenRes = listen(server_s, SOMAXCONN);
+	if (ListenRes == SOCKET_ERROR)
+	{
+		printf("Failed listening on socket, error %ld.\n", WSAGetLastError());
+		//goto server_cleanup_2;
+	}
+	SOCKET client_s;
+	while (1)
+	{ // &client_addr
+		if (socketCount < 2)
+		{
+			client_s = accept(server_s, NULL, NULL);
+			if (client_s == INVALID_SOCKET)
+			{
+				printf("Accepting connection with client failed, error %ld\n", WSAGetLastError());
+				//goto server_cleanup_3;
+			}
+			allSockets[socketCount] = client_s;
+			socketCount++;
+
+
+			//set descriptors
+			FD_ZERO(&fds);
+			FD_SET(client_s, &fds);
+
+			retval = select(max(server_s, stdin) + 1, &fds, NULL, NULL, &timeout);
+			if (retval < 0)
+			{//error occured
+				return 1;
+				// check errno/WSAGetLastError(), call perror(), etc ...
+			}
+
+			if (retval > 0)
+			{
+				if (FD_ISSET(client_s, &fds))
+				{//data was received from the channel
+				//we will process it (decode) and write it to the output file
+
+					//Receive data from the channel
+					char* recieved = NULL;
+					int Rec;
+					//CLIENT_REQUEST 
+					// 
+					//type = getArgsFromMessage(received, ) --------------------------------------------------------------
+				///// CHECK IF THERE ARE NO MORE THN 2 THREADS OR DENY
+					if (openThread(&((Threads)[socketCount-1]), &threadExecute, &client_s, &(threadIDs[0])))
+					{
+						openedsuccessfuly[0] = 0; // if thread wasnt opened successfully
+						printf("Error with thread %d\n", 0);
+					}
+
+					//TURN_SWITCHED 
+					//Sleep(5000000);
+					//break;
+				}
+			}
+			if (retval == 0)
+			{
+				//TIMEOUT?
+				continue;
+			}
+		}
+	}
+	// Deinitialize Winsock
+	result = WSACleanup();
+	if (result != 0) {
+		printf("WSACleanup failed: %d\n", result);
+		return 1;
+	}
+	return 0;
+}
+
+
+/*			ThreadExecute:
+char* send, * recieved = NULL;
 	int Rec, Game_Ended_flag = 0;
 	send = PrepareMessage(SERVER_APPROVED, NULL,NULL,NULL);
 	if (SendString(send, *client_s) !=TRNS_SUCCEEDED) {
@@ -538,121 +765,4 @@ DWORD WINAPI threadExecute(SOCKET *client_s) {
 	// 
 	// TURN_SWITCH
 	// 
-	//return 0;
-}
-
-int main(int argc, char* argv[])
-{
-	WSADATA wsa_data;
-	int result;
-	result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
-	if (result != 0) {
-		printf("WSAStartup failed: %d\n", result);
-		return 1;
-	}
-	// Create and init socket
-	SOCKET server_s;
-	if ((server_s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == INVALID_SOCKET)
-	{
-		printf("Could not create socket : %d", WSAGetLastError());
-		return 1;
-	}
-	struct sockaddr_in server_addr;
-	struct sockaddr_in client_addr;
-	server_addr.sin_family = AF_INET;
-	server_addr.sin_port = htons(atoi(argv[1]));
-	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	int client_addrss_len, server_addrss_len = sizeof(server_addr);
-
-	//Bind
-	if (bind(server_s, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
-	{
-		printf("Bind failed with error code : %d", WSAGetLastError());
-		exit(EXIT_FAILURE);
-	}
-
-	// Setup timeval variable
-	struct timeval timeout;
-	struct fd_set fds;
-
-	HANDLE Threads[2];
-	DWORD threadIDs[10];
-	int openedsuccessfuly[2];
-	int type;
-
-	timeout.tv_sec = 13;
-	timeout.tv_usec = 0;
-
-	int retval, received=0;
-	//char buffer[3] = { 0 };
-
-	//wait for data to be sent by the channel
-	int ListenRes = listen(server_s, SOMAXCONN);
-	if (ListenRes == SOCKET_ERROR)
-	{
-		printf("Failed listening on socket, error %ld.\n", WSAGetLastError());
-		//goto server_cleanup_2;
-	}
-
-	SOCKET client_s = accept(server_s, NULL, NULL);
-	if (client_s == INVALID_SOCKET)
-	{
-		printf("Accepting connection with client failed, error %ld\n", WSAGetLastError());
-		//goto server_cleanup_3;
-	}
-	while (1)
-	{ // &client_addr
-	
-	  //set descriptors
-		FD_ZERO(&fds);
-		FD_SET(client_s, &fds);
-		
-		retval = select(max(server_s, stdin) + 1, &fds, NULL, NULL, &timeout);
-		if (retval < 0)
-		{//error occured
-			return 1;
-			// check errno/WSAGetLastError(), call perror(), etc ...
-		}
-
-		if (retval > 0)
-		{
-			if (FD_ISSET(client_s, &fds))
-			{//data was received from the channel
-			//we will process it (decode) and write it to the output file
-
-				//Receive data from the channel
-				char* recieved=NULL;
-				int Rec;
-				//CLIENT_REQUEST 
-				Rec = RecvDataThread(&recieved, client_s);
-				if (Rec != TRNS_SUCCEEDED) {
-					return 1;
-				}
-				//type = getArgsFromMessage(received, ) --------------------------------------------------------------
-			///// CHECK IF THERE ARE NO MORE THN 2 THREADS OR DENY
-				if (openThread(&((Threads)[0]), &threadExecute, &client_s , &(threadIDs[0])))
-				{
-					openedsuccessfuly[0] = 0; // if thread wasnt opened successfully
-					printf("Error with thread %d\n", 0);
-				}
-				
-				//TURN_SWITCHED 
-				Sleep(5000000);
-				break;
-			}
-		}
-		if (retval == 0)
-		{
-			//TIMEOUT?
-			continue;
-		}
-	}
-	
-	// Deinitialize Winsock
-	result = WSACleanup();
-	if (result != 0) {
-		printf("WSACleanup failed: %d\n", result);
-		return 1;
-	}
-	return 0;
-}
+	//return 0;*/

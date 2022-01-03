@@ -172,6 +172,8 @@ int transMessageToInt(char* message, char** arg1, char** arg2, char** arg3)
 		return SERVER_MOVE_REQUEST;
 	if (!strcmp(message, "SERVER_OPPONENT_QUIT\n"))
 		return SERVER_OPPONENT_QUIT;
+	if (!strcmp(message, "SERVER_NO_OPPONENTS\n"))
+		return SERVER_NO_OPPONENTS;
 	//with arguments:
 	return getArgsFromMessage(message, arg1, arg2, arg3);
 }
@@ -363,7 +365,7 @@ int PlayGame()
 	name = malloc(20 * sizeof(char));
 	otherPlayerMove = malloc(20 * sizeof(char));
 	gameStatus = malloc(20 * sizeof(char));
-		while (!gameStruct.gameEnded)
+	while (!gameStruct.gameEnded)
 	{
 			//TRUN_SWITCH
 		Rec = RecvDataThread(&received);
@@ -493,7 +495,7 @@ int main(int argc, char* argv[])
 {
 	gameStruct.clientName = argv[3];
 	char ch = '\n';
-	strncat(gameStruct.clientName, &ch, 1); /////////               append \n to name for strcmp with name 
+	//strncat(gameStruct.clientName, &ch, 1); /////////               append \n to name for strcmp with name 
 	// Initialize Winsock
 	WSADATA wsa_data;
 	int result;
@@ -521,7 +523,7 @@ int main(int argc, char* argv[])
 	int client_addr_len = sizeof(server_addr);
 
 	char* buffer, * recieved = NULL, input[10] = { 0 };
-	struct timeval timeout;
+	//struct timeval timeout;
 	int Rec, type;
 
 	// Call the connect function, passing the created socket and the sockaddr_in structure as parameters. 
@@ -545,8 +547,8 @@ int main(int argc, char* argv[])
 		}
 		printf("Connected to server on %s:%s.\n", argv[1], argv[2]);
 		// Setup timeval variable and fd_set variable
-		timeout.tv_sec = 15;
-		timeout.tv_usec = 0;
+		//timeout.tv_sec = 15;
+		//timeout.tv_usec = 0;
 
 		struct fd_set fds;
 		//CLIENT_REQUEST
@@ -591,6 +593,7 @@ int main(int argc, char* argv[])
 	free(recieved);
 	recieved = NULL;
 	//RECV MAIN MENU
+	get_main_menu:
 	Rec = RecvDataThread(&recieved);
 	if (Rec == TRNS_SUCCEEDED)
 	{
@@ -631,15 +634,23 @@ int main(int argc, char* argv[])
 	// CLIENT_VERSUS was chosen
 	free(recieved);
 	recieved = NULL;
+	DWORD timeout = 30000;
+	if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
+		printf("setsockopt failed\n");
 	Rec = RecvDataThread(&recieved);     
 	if (Rec == TRNS_SUCCEEDED)
 	{
-		if ((type=transMessageToInt(recieved, NULL, NULL, NULL)) == GAME_STARTED) //DOESMT WORK
+		if ((type=transMessageToInt(recieved, NULL, NULL, NULL)) == GAME_STARTED) 
 		{
+			free(recieved);
+			recieved = NULL;
 			PlayGame();
 		}
 		if (type == SERVER_NO_OPPONENTS)
 		{
+			free(recieved);
+			recieved = NULL;
+			goto get_main_menu;
 			////////////////			take care!!!!
 		}
 	}
