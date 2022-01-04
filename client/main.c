@@ -132,10 +132,10 @@ int getArgsFromMessage(char* message, char **arg1, char** arg2, char** arg3)
 		return GAME_ENDED;
 	}
 	if (!strcmp(mType, "TURN_SWITCH")) {
-		temp1 = strchr(temp + 1, ';');
+		temp1 = strchr(temp + 1, '\n');
 		if (temp1 != NULL)
 			*temp1 = '\0';
-		strcpy(*arg1, temp + 1);
+		strcpy(*arg1, temp + 1);                                            //arg1 doesnt go through!!!!!!!
 		//arg1 = '\0';               ///////////////////////////////////
 		return TURN_SWITCH;
 	}
@@ -149,7 +149,7 @@ int getArgsFromMessage(char* message, char **arg1, char** arg2, char** arg3)
 		*temp1 = '\0';
 		strcpy(*arg2, temp);
 		temp = temp1 + 1;
-		temp1 = strchr(temp, ';');
+		temp1 = strchr(temp, '\n');
 		if (temp1 != NULL)
 			*temp1 = '\0';
 		strcpy(*arg3, temp);
@@ -344,11 +344,11 @@ char* PrepareMessage(int messageType, char* arg1)
 			return NULL;
 		}
 
-		if ((buffer = malloc(buffSize * sizeof(char))) == NULL)
+		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
 		{
 			return NULL;
 		}
-		sprintf_s(buffer, "CLIENT_DISCONNECT\n",arg1);
+		sprintf_s(buffer, buffSize + 1, "CLIENT_DISCONNECT\n");
 		break;
 	default:
 		buffer = NULL;
@@ -375,7 +375,7 @@ int PlayGame()
 			switch (type)
 			{
 			case TURN_SWITCH:
-				if (!strcmp(name, gameStruct.clientName))     //////////////////////// problem!!! philip\n != philip ???????
+				if (!strcmp(name, gameStruct.clientName))    
 				{//our turn 
 					printf("Your turn!\n");
 					free(received);
@@ -426,71 +426,7 @@ int PlayGame()
 	free(gameStatus);
 	return 0;
 }
-/* {
-	char* recieved = NULL, * input = NULL, * buffer = NULL;
-	int Rec;
-	// play game:
-	while (1)
-	{
-		//recv TURN_SWITCH
-		Rec = RecvDataThread(&recieved);
-		if (Rec == TRNS_SUCCEEDED) {
 
-			if (!strcmp(recieved, "TURN_SWITCH:Philip\n")) { ////TEMPORARY
-				free(recieved);
-				recieved = NULL;
-				//SERVER_MOVE_REQUEST
-				Rec = RecvDataThread(&recieved);
-			}
-			else if (!strcmp(recieved, "TURN_SWITCH:%s\n", "Other Player Name")) {
-				//GAME_VIEW wait 
-				free(recieved);
-				recieved = NULL;
-				Rec = RecvDataThread(&recieved);
-				if (Rec == TRNS_SUCCEEDED) {
-					//	if (!strcmp(recieved, "GAME_VIEW\n")) {/////////////////////// ARGUMENTS
-					//	}
-				}
-				// wait for another turn switch
-			}
-			if (Rec == TRNS_SUCCEEDED) {
-				if (!strcmp(recieved, "SERVER_MOVE_REQUEST\n")) {
-					printf("Enter the next number or boom:\n");
-					gets(input);
-					buffer = PrepareMessage(CLIENT_PLAYER_MOVE, input);
-					if (SendString(buffer, client_s) != TRNS_SUCCEEDED) {
-						printf("sendto() failed with error code : %d", WSAGetLastError());
-						closesocket(client_s);
-						free(buffer);
-						return 1;
-					}
-				}
-			}
-			free(recieved);
-			recieved = NULL;
-			// RECV GAME_VIEW
-			Rec = RecvDataThread(&recieved);
-			if (Rec == TRNS_SUCCEEDED) {
-				if (!strcmp(recieved, "GAME_VIEW:%s;%s;%s\n", "Other player", "Move", "CONT\DONE")) {
-					if (1) {
-						//if  not done
-						if (1) {
-							continue;
-						}
-						else {
-							//finish game 
-							return 1;//
-						}
-					}
-
-				}
-			}
-
-		}
-	}
-}
-
-*/
 int main(int argc, char* argv[])
 {
 	gameStruct.clientName = argv[3];
@@ -627,6 +563,12 @@ int main(int argc, char* argv[])
 				}
 				Sleep(1000);
 				closesocket(client_s);
+				result = WSACleanup();
+				if (result != 0) {
+					printf("WSACleanup failed: %d\n", result);
+					return 1;
+				}
+				return 1;
 			}
 		}
 	}
@@ -640,10 +582,11 @@ int main(int argc, char* argv[])
 	Rec = RecvDataThread(&recieved);     
 	if (Rec == TRNS_SUCCEEDED)
 	{
-		if ((type=transMessageToInt(recieved, NULL, NULL, NULL)) == GAME_STARTED) 
+		if ((type=transMessageToInt(recieved, NULL, NULL, NULL)) == GAME_STARTED)              ///////////RECV TURN SWITCH rather than GAME_STARTED Problem with Server???
 		{
 			free(recieved);
 			recieved = NULL;
+			printf("Game is on!\n");
 			PlayGame();
 		}
 		if (type == SERVER_NO_OPPONENTS)
@@ -651,7 +594,6 @@ int main(int argc, char* argv[])
 			free(recieved);
 			recieved = NULL;
 			goto get_main_menu;
-			////////////////			take care!!!!
 		}
 	}
 
@@ -664,47 +606,3 @@ int main(int argc, char* argv[])
 	//free(recieved);
 	return 0;
 }
-/*
-	// GAME LOOP:
-	while (1)
-	{
-
-		
-		
-		//recv GAME_STARTED
-		free(recieved);
-		recieved = NULL;
-		int Rec = RecvDataThread(&recieved);
-		if (Rec == TRNS_SUCCEEDED) {
-			if (!strcmp(recieved, "GAME_STARTED\n")) {
-				printf("Game is on!\n");
-			}
-			else {
-				printf("ERROR\n");
-			}
-		}
-
-		//VERSUS_CLIENT / DISCONNECT_CLIENT
-		//recv STARTED_GAME
-		// loop:
-		//recv SWITCH_TURN
-		//**wait until** recv REQUEST_MOVE_SERVER
-		//CLIENT_PLAYER_MOVE
-		//recv GAME_VIEW
-		//end loop
-		// recv ENDED_GAME
-		//end LOOP
-
-
-		printf("Success");
-		// Deinitialize Winsock
-		result = WSACleanup();
-		if (result != 0) {
-			printf("WSACleanup failed: %d\n", result);
-			return 1;
-		}
-		free(buffer);
-		//free(recieved);
-		return 0;
-	}
-}*/

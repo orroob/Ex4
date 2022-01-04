@@ -53,6 +53,9 @@ typedef struct Game
 Game game_state = { 0 };
 SOCKET allSockets[MAX_SOCKETS];
 int socketCount = 0;
+HANDLE GlobalSemaphore;
+HANDLE GameManagerHandle;
+HANDLE GameMutex;
 
 int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 {
@@ -60,13 +63,11 @@ int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 	int BytesJustTransferred;
 	int RemainingBytesToReceive = BytesToReceive;
 	int Last_Error_Value = 0;
-	DWORD timeout = 15000;
 	
 	while (RemainingBytesToReceive > 0)
 	{
 		/* send does not guarantee that the entire message is sent */
-		if (setsockopt(sd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
-			printf("setsockopt failed\n");
+		
 		BytesJustTransferred = recv(sd, CurPlacePtr, RemainingBytesToReceive, 0);
 		if (BytesJustTransferred == SOCKET_ERROR)
 		{
@@ -406,14 +407,14 @@ int getArgsFromMessage(char* message, char** arg1)
 	mType[i] = '\0';
 	*temp = '\0';
 	if (!strcmp(mType, "CLIENT_REQUEST")) {
-		temp1 = strchr(temp + 1, ';');
+		temp1 = strchr(temp + 1, '\n');
 		if (temp1 != NULL)
 			*temp1 = '\0';
 		strcpy(*arg1, temp + 1);    ////////////
 		return CLIENT_REQUEST;
 	}
 	if (!strcmp(mType, "CLIENT_PLAYER_MOVE")) {
-		temp1 = strchr(temp + 1, ';');
+		temp1 = strchr(temp + 1, '\n');
 		if (temp1 != NULL)
 			*temp1 = '\0';
 		strcpy(*arg1, temp + 1);    //////////// WORKed AFTER I USED MALLOC FOR NEXT_MOVE  NEED TO FREE
@@ -468,13 +469,15 @@ int decideTurn()
 int func(SOCKET *client_s, int index)
 {
 	char * received = NULL, *arg;
-	int Rec, type, threadTurn;
+	int Rec, type, threadTurn, canStartGame;
 	if ((arg = malloc(20 * sizeof(char))) == NULL)
 		return 1;
+	DWORD timeout = 15000;
 
 	while (!game_state.game_ended)
 	{
-		printf("start iteration\n");
+		if (setsockopt(*client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
+			printf("setsockopt failed\n");
 		Rec = RecvDataThread(&received, *client_s);
 		if (Rec != TRNS_SUCCEEDED) {
 			continue;
@@ -509,7 +512,16 @@ int func(SOCKET *client_s, int index)
 			createAndSendMessage(*client_s, SERVER_MAIN_MENU, NULL, NULL, NULL);
 			break;
 		case CLIENT_VERSUS:
-			if (game_state.players_num < 2)
+			//wait for other player to join (15 sec)
+			if (game_state.players_num < 2) { // if this is the first player- wait forever for the second one
+				WaitForSingleObject(GameManagerHandle, 15000);
+			}
+			if (game_state.players_num >= 2)
+			{
+				SetEvent(GameManagerHandle);
+			}
+			canStartGame = (game_state.players_num >= 2);
+			if (!canStartGame)
 			{
 				createAndSendMessage(*client_s, SERVER_NO_OPPONENTS, NULL, NULL, NULL);
 				createAndSendMessage(*client_s, SERVER_MAIN_MENU, NULL, NULL, NULL);
@@ -517,12 +529,16 @@ int func(SOCKET *client_s, int index)
 			}
 			// --------------- need to add mutex------------------------------------
 			threadTurn = decideTurn();
+			//כוס אמק 
+			createAndSendMessage(allSockets[0], GAME_STARTED,NULL, NULL, NULL);
+			createAndSendMessage(allSockets[1], GAME_STARTED,NULL, NULL, NULL);
+			//
 			createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL);
 			createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL);
 			// --------------- need to release mutex------------------------------------
 			if(threadTurn == index)
 			{
-				createAndSendMessage(*client_s, SERVER_MOVE_REQUEST, game_state.players[threadTurn], NULL, NULL);
+				createAndSendMessage(allSockets[threadTurn], SERVER_MOVE_REQUEST, NULL, NULL, NULL);
 			}			
 			break;
 		case CLIENT_PLAYER_MOVE:
@@ -545,11 +561,14 @@ int func(SOCKET *client_s, int index)
 			createAndSendMessage(allSockets[0], GAME_ENDED, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
 			createAndSendMessage(allSockets[1], GAME_ENDED, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
 			
+			ResetEvent(GameManagerHandle);
+			
 			createAndSendMessage(allSockets[0], SERVER_MAIN_MENU, NULL, NULL, NULL);
 			createAndSendMessage(allSockets[1], SERVER_MAIN_MENU, NULL, NULL, NULL);
 			// --------------- need to release mutex------------------------------------
 			break;
 		case CLIENT_DISCONNECT:
+			ResetEvent(GameManagerHandle);
 			socketCount--;
 			break;
 		default:
@@ -560,6 +579,14 @@ int func(SOCKET *client_s, int index)
 
 int main(int argc, char* argv[])
 {
+	GameManagerHandle = CreateEvent(NULL, TRUE, FALSE, "Game_Manager_Handle");
+
+	if (NULL == GameManagerHandle)
+	{
+		printf("Couldn't create event\n");
+		return 1;
+	}
+
 	WSADATA wsa_data;
 	int result;
 	result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
@@ -590,6 +617,9 @@ int main(int argc, char* argv[])
 
 	// Setup timeval variable
 	struct timeval timeout;
+	timeout.tv_sec = 13;
+	timeout.tv_usec = 0;
+
 	struct fd_set fds;
 
 	HANDLE Threads[2];
@@ -597,9 +627,7 @@ int main(int argc, char* argv[])
 	int openedsuccessfuly[2];
 	int type;
 
-	timeout.tv_sec = 13;
-	timeout.tv_usec = 0;
-
+	
 	int retval, received = 0;
 	//char buffer[3] = { 0 };
 
@@ -673,96 +701,10 @@ int main(int argc, char* argv[])
 		printf("WSACleanup failed: %d\n", result);
 		return 1;
 	}
+	if(!ReleaseSemaphore(GlobalSemaphore, 1, NULL))
+	{
+		printf("problem\n");
+		return 1;
+	}
 	return 0;
 }
-
-
-/*			ThreadExecute:
-char* send, * recieved = NULL;
-	int Rec, Game_Ended_flag = 0;
-	send = PrepareMessage(SERVER_APPROVED, NULL,NULL,NULL);
-	if (SendString(send, *client_s) !=TRNS_SUCCEEDED) {
-		printf("Failed to send Server approved");
-	}
-	free(send);
-	send = NULL;
-
-	//send MAIN MENU
-	send = PrepareMessage(SERVER_MAIN_MENU, NULL, NULL, NULL);
-	if (SendString(send, *client_s) != TRNS_SUCCEEDED) {
-		printf("Failed to send Server approved");
-	}
-	free(send);
-	send = NULL;
-
-	// RECV CLIENT_VERSUS
-	free(recieved);
-	recieved = NULL;
-	Rec = RecvDataThread(&recieved, *client_s);   
-	if (Rec == TRNS_SUCCEEDED) {
-		if (!strcmp(recieved, "CLIENT_VERSUS\n")) 
-		{
-			free(recieved);
-			recieved = NULL;
-			send = PrepareMessage(GAME_STARTED, NULL, NULL, NULL);
-			SendString(send, *client_s);
-			free(send);
-			send = NULL;
-			//Sleep(5000);
-			//TURN_SWITCH
-			send = PrepareMessage(TURN_SWITCH, "Philip",NULL,NULL); /////////// for now Parameter is Pseudo 
-			SendString(send, *client_s);
-			free(send);
-			send = NULL;
-			//SERVER SERVER_MOVE_REQUEST
-			send = PrepareMessage(SERVER_MOVE_REQUEST,NULL, NULL, NULL); 
-			SendString(send, *client_s);
-			free(send);
-			send = NULL;
-
-			//RECV PLAYER_MOVE_REQUEST
-			
-			Rec = RecvDataThread(&recieved, *client_s);  /////////works (: !
-			if (Rec == TRNS_SUCCEEDED) {
-				//char next_move[30] = {0};  /////DIDNT WORK
-				char* next_move;
-				next_move = malloc(20 * sizeof(char));           ////////NEED TO FREE 
-				getArgsFromMessage(recieved, &next_move, NULL, NULL);
-				if (LEGAL_MOVE(next_move)) {
-					//////SEND mESsAGE TO OTHER PLAYER
-					game_state.Game_number++;
-				}
-
-				else {
-					Game_Ended_flag = 1;
-
-				}
-				if (Game_Ended_flag != 1) {
-					send = PrepareMessage(GAME_VIEW, "Other_Players_name", recieved, "CONT"); /////////// for now Parameter is Pseudo 
-					SendString(send, *client_s);
-					free(send);
-					send = NULL;
-				}
-				else {
-					send = PrepareMessage(GAME_VIEW, "Other_Players_name", recieved, "END"); /////////// for now Parameter is Pseudo 
-					SendString(send, *client_s);
-					free(send);
-					send = NULL;
-				}
-
-			}
-			send = PrepareMessage(GAME_ENDED, "WHO_WON", NULL,NULL); /////////// for now Parameter is Pseudo 
-			SendString(send, *client_s);
-			free(send);
-			send = NULL;
-
-		}
-		else {
-			// Quit
-		}
-	}
-	
-	// 
-	// TURN_SWITCH
-	// 
-	//return 0;*/
