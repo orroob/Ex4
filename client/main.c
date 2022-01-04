@@ -396,6 +396,7 @@ int PlayGame()
 							printf("Enter the next number or boom:\n");
 							gets(input);                                            
 							buffer = PrepareMessage(CLIENT_PLAYER_MOVE, input);
+							Sleep(500);
 							if (SendString(buffer, client_s) != TRNS_SUCCEEDED)
 							{
 								printf("send failed with error code : %d", WSAGetLastError());

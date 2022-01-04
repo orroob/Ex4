@@ -56,7 +56,7 @@ int socketCount = 0;
 HANDLE GlobalSemaphore;
 HANDLE GameManagerHandle;
 HANDLE GameMutex;
-HANDLE GameEnded;
+HANDLE StartGameMutex;
 
 int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 {
@@ -469,10 +469,15 @@ int decideTurn()
 	return game_state.Game_number % 2;
 }
 
+int initGame()
+{
+	return 0;
+}
+
 int func(SOCKET *client_s, int index)
 {
 	char * received = NULL, *arg;
-	int Rec, type, threadTurn=0, canStartGame;
+	int Rec, type, threadTurn=0, canStartGame, isFirstPlayer = 0;
 	if ((arg = malloc(20 * sizeof(char))) == NULL)
 		return 1;
 	DWORD timeout = 15000000000;
@@ -523,14 +528,17 @@ int func(SOCKET *client_s, int index)
 			//wait for other player to join (15 sec)
 			
 			if (game_state.players_num < 2) { // if this is the first player- wait forever for the second one
-				//createAndSendMessage(allSockets[0], GAME_STARTED, NULL, NULL, NULL);
-				//createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[0], NULL, NULL);
-				//createAndSendMessage(allSockets[0], SERVER_MOVE_REQUEST, NULL, NULL, NULL);
-				WaitForSingleObject(GameManagerHandle, 150000);
+				createAndSendMessage(allSockets[0], GAME_STARTED, NULL, NULL, NULL);
+				createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[0], NULL, NULL);
+				createAndSendMessage(allSockets[0], SERVER_MOVE_REQUEST, NULL, NULL, NULL);
+				continue; ///////////////////////////////////////////////////////////////////////////// checkkkkk
+				isFirstPlayer = 1;
+				//WaitForSingleObject(GameManagerHandle, 150000);
 			}
-			if (game_state.players_num >= 2)
+			if (game_state.players_num >= 2 && !isFirstPlayer)
 			{
 				SetEvent(GameManagerHandle);
+				continue;
 			}
 			
 			canStartGame = (game_state.players_num >= 2);
@@ -543,7 +551,7 @@ int func(SOCKET *client_s, int index)
 			}
 			// --------------- need to add mutex------------------------------------
 			printf("Got Here");    //Printed Twicw one after the other
-			WaitForSingleObject(GameEnded,INFINITE);
+			WaitForSingleObject(StartGameMutex,INFINITE);
 			/////////////////////////////////////////////////////////////////////////////////////////////////////
 			//threadTurn = decideTurn();
 			//
@@ -565,13 +573,13 @@ int func(SOCKET *client_s, int index)
 				
 				createAndSendMessage(allSockets[threadTurn], SERVER_MOVE_REQUEST, NULL, NULL, NULL);
 			}
-			ReleaseMutex(GameEnded);
+			ReleaseMutex(StartGameMutex);
 
 			break;
 
 		case CLIENT_PLAYER_MOVE:
 			// --------------- need to add mutex------------------------------------
-			WaitForSingleObject(GameEnded, INFINITE);
+			//WaitForSingleObject(StartGameMutex, INFINITE);
 			if (LEGAL_MOVE(arg))
 			{
 				game_state.Game_number++;
@@ -595,7 +603,7 @@ int func(SOCKET *client_s, int index)
 			
 			createAndSendMessage(allSockets[0], SERVER_MAIN_MENU, NULL, NULL, NULL);
 			createAndSendMessage(allSockets[1], SERVER_MAIN_MENU, NULL, NULL, NULL);
-			ReleaseMutex(GameEnded);
+			//ReleaseMutex(StartGameMutex);
 			// --------------- need to release mutex------------------------------------
 			break;
 		case CLIENT_DISCONNECT:
@@ -670,13 +678,13 @@ int main(int argc, char* argv[])
 		printf("Failed listening on socket, error %ld.\n", WSAGetLastError());
 		//goto server_cleanup_2;
 	}
-	GameEnded = CreateMutex(
+	StartGameMutex = CreateMutex(
 		NULL,
 		NULL,
 		"Game_Ended"
 	);
 
-	if (NULL == GameEnded)
+	if (NULL == StartGameMutex)
 	{
 		printf("Couldn't create thread\n");
 		return 1;
@@ -685,7 +693,7 @@ int main(int argc, char* argv[])
 	
 	while (1)
 	{ 
-		Sleep(0);
+		//Sleep(0);
 		if (socketCount < 2)
 		{
 			client_s = accept(server_s, NULL, NULL);
