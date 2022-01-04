@@ -119,7 +119,7 @@ int getArgsFromMessage(char* message, char **arg1, char** arg2, char** arg3)
 	}
 	if (temp == NULL)
 		return -1;
-	mType[i] = '\0';
+	mType[i] = '\0';   ///FAILS
 	*temp = '\0';
 	//strcpy(mType, message);
 
@@ -361,6 +361,7 @@ int PlayGame()
 	char* received = NULL, * buffer = NULL;
 	char input[10] = { 0 };
 	int Rec, type;
+	DWORD timeout = 150000;
 	char* name, * otherPlayerMove, * gameStatus;
 	name = malloc(20 * sizeof(char));
 	otherPlayerMove = malloc(20 * sizeof(char));
@@ -368,7 +369,9 @@ int PlayGame()
 	while (!gameStruct.gameEnded)
 	{
 			//TRUN_SWITCH
-		Rec = RecvDataThread(&received);
+		if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
+			printf("setsockopt failed\n");
+		Rec = RecvDataThread(&received);     ///////////STUCK ON RECV FOR  palyer number 2
 		if (Rec == TRNS_SUCCEEDED)
 		{
 			type = transMessageToInt(received, &name, &otherPlayerMove, &gameStatus);
@@ -381,6 +384,8 @@ int PlayGame()
 					free(received);
 					received = NULL;
 					//SERVER_MOVE_REQUEST
+					if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
+						printf("setsockopt failed\n");
 					Rec = RecvDataThread(&received);
 					if (Rec == TRNS_SUCCEEDED)
 					{
@@ -393,7 +398,7 @@ int PlayGame()
 							if (SendString(buffer, client_s) != TRNS_SUCCEEDED)
 							{
 								printf("send failed with error code : %d", WSAGetLastError());
-								closesocket(client_s);
+								//closesocket(client_s);
 								free(name);
 								free(otherPlayerMove);
 								free(gameStatus);
@@ -408,7 +413,7 @@ int PlayGame()
 				}
 				break;
 			case GAME_VIEW:
-				printf("%s move was %s\n%s", name, otherPlayerMove, gameStatus);
+				printf("%s move was %s\n%s\n", name, otherPlayerMove, gameStatus); //check if both '\n\' are needed ------------------------
 				break;
 			case GAME_ENDED:
 				printf("%s won!\n", name);
@@ -524,12 +529,14 @@ int main(int argc, char* argv[])
 		}
 	}
 	//we are now connected to the server
-
+	//DWORD timeout1 = 15000000;
 	// MAIN MENU
 	free(recieved);
 	recieved = NULL;
 	//RECV MAIN MENU
-	get_main_menu:
+get_main_menu:
+	//if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout1, sizeof timeout1) < 0)
+	//	printf("setsockopt failed\n");
 	Rec = RecvDataThread(&recieved);
 	if (Rec == TRNS_SUCCEEDED)
 	{
@@ -576,7 +583,7 @@ int main(int argc, char* argv[])
 	// CLIENT_VERSUS was chosen
 	free(recieved);
 	recieved = NULL;
-	DWORD timeout = 30000;
+	DWORD timeout = 300000000;
 	if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
 		printf("setsockopt failed\n");
 	Rec = RecvDataThread(&recieved);     

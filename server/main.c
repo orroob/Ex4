@@ -56,6 +56,7 @@ int socketCount = 0;
 HANDLE GlobalSemaphore;
 HANDLE GameManagerHandle;
 HANDLE GameMutex;
+HANDLE GameEnded;
 
 int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 {
@@ -458,7 +459,8 @@ DWORD WINAPI threadExecute(SOCKET *client_s)
 	if (setsockopt(*client_s, SOL_SOCKET, SO_SNDTIMEO, &timeout,sizeof timeout) < 0)
 		printf("setsockopt failed\n");
 	*/
-	func(client_s, game_state.players_num);
+	printf("Thread_opened\n");
+	func(client_s, socketCount-1);
 }
 
 int decideTurn()
@@ -469,16 +471,19 @@ int decideTurn()
 int func(SOCKET *client_s, int index)
 {
 	char * received = NULL, *arg;
-	int Rec, type, threadTurn, canStartGame;
+	int Rec, type, threadTurn=0, canStartGame;
 	if ((arg = malloc(20 * sizeof(char))) == NULL)
 		return 1;
-	DWORD timeout = 15000;
+	DWORD timeout = 15000000000;
 
 	while (!game_state.game_ended)
 	{
+		//Semaphore 
 		if (setsockopt(*client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
 			printf("setsockopt failed\n");
-		Rec = RecvDataThread(&received, *client_s);
+		Rec = RecvDataThread(&received, *client_s);      ////////////////DOESNT WORK REC =  0
+		if (Rec == 0)
+			continue;
 		if (Rec != TRNS_SUCCEEDED) {
 			continue;
 			//free(received);
@@ -504,45 +509,68 @@ int func(SOCKET *client_s, int index)
 			//add player's name to game struct
 			game_state.players[game_state.players_num] = malloc(20 * sizeof(char));
 			strcpy(game_state.players[index], arg);
-
-			//inc players num 
-			game_state.players_num++;
+			
 
 			//send MAIN MENU
+		
+		
 			createAndSendMessage(*client_s, SERVER_MAIN_MENU, NULL, NULL, NULL);
 			break;
 		case CLIENT_VERSUS:
+			//inc players num 
+			game_state.players_num++;
 			//wait for other player to join (15 sec)
+			
 			if (game_state.players_num < 2) { // if this is the first player- wait forever for the second one
-				WaitForSingleObject(GameManagerHandle, 15000);
+				//createAndSendMessage(allSockets[0], GAME_STARTED, NULL, NULL, NULL);
+				//createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[0], NULL, NULL);
+				//createAndSendMessage(allSockets[0], SERVER_MOVE_REQUEST, NULL, NULL, NULL);
+				WaitForSingleObject(GameManagerHandle, 150000);
 			}
 			if (game_state.players_num >= 2)
 			{
 				SetEvent(GameManagerHandle);
 			}
+			
 			canStartGame = (game_state.players_num >= 2);
-			if (!canStartGame)
+			if (!canStartGame)  //returns here
 			{
+				game_state.players_num--;    
 				createAndSendMessage(*client_s, SERVER_NO_OPPONENTS, NULL, NULL, NULL);
 				createAndSendMessage(*client_s, SERVER_MAIN_MENU, NULL, NULL, NULL);
 				continue;
 			}
 			// --------------- need to add mutex------------------------------------
-			threadTurn = decideTurn();
-			//כוס אמק 
-			createAndSendMessage(allSockets[0], GAME_STARTED,NULL, NULL, NULL);
-			createAndSendMessage(allSockets[1], GAME_STARTED,NULL, NULL, NULL);
+			printf("Got Here");    //Printed Twicw one after the other
+			WaitForSingleObject(GameEnded,INFINITE);
+			
+			//threadTurn = decideTurn();
+			//
+			Sleep(0);
+			if ((threadTurn = decideTurn()) != index) {
+				continue;
+			}
+		
+			createAndSendMessage(allSockets[0], GAME_STARTED, NULL, NULL, NULL);
+			createAndSendMessage(allSockets[1], GAME_STARTED, NULL, NULL, NULL);
+			printf("GAME_Started from %d index", index);
+			
 			//
 			createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL);
 			createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL);
 			// --------------- need to release mutex------------------------------------
 			if(threadTurn == index)
 			{
+				
 				createAndSendMessage(allSockets[threadTurn], SERVER_MOVE_REQUEST, NULL, NULL, NULL);
-			}			
+			}
+			ReleaseMutex(GameEnded);
+
 			break;
+
 		case CLIENT_PLAYER_MOVE:
 			// --------------- need to add mutex------------------------------------
+			WaitForSingleObject(GameEnded, INFINITE);
 			if (LEGAL_MOVE(arg))
 			{
 				game_state.Game_number++;
@@ -561,13 +589,15 @@ int func(SOCKET *client_s, int index)
 			createAndSendMessage(allSockets[0], GAME_ENDED, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
 			createAndSendMessage(allSockets[1], GAME_ENDED, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
 			
-			ResetEvent(GameManagerHandle);
+			//ResetEvent(GameManagerHandle);
 			
 			createAndSendMessage(allSockets[0], SERVER_MAIN_MENU, NULL, NULL, NULL);
 			createAndSendMessage(allSockets[1], SERVER_MAIN_MENU, NULL, NULL, NULL);
+			ReleaseMutex(GameEnded);
 			// --------------- need to release mutex------------------------------------
 			break;
 		case CLIENT_DISCONNECT:
+			game_state.players_num--;
 			ResetEvent(GameManagerHandle);
 			socketCount--;
 			break;
@@ -617,7 +647,7 @@ int main(int argc, char* argv[])
 
 	// Setup timeval variable
 	struct timeval timeout;
-	timeout.tv_sec = 13;
+	timeout.tv_sec = 100000000000;
 	timeout.tv_usec = 0;
 
 	struct fd_set fds;
@@ -631,16 +661,30 @@ int main(int argc, char* argv[])
 	int retval, received = 0;
 	//char buffer[3] = { 0 };
 
-	//wait for data to be sent by the channel
+	//wait for data to be sent by the channel WSA_FLAG_OVERLAPPED
 	int ListenRes = listen(server_s, SOMAXCONN);
 	if (ListenRes == SOCKET_ERROR)
 	{
 		printf("Failed listening on socket, error %ld.\n", WSAGetLastError());
 		//goto server_cleanup_2;
 	}
+	GameEnded = CreateMutex(
+		NULL,
+		NULL,
+		"Game_Ended"
+	);
+
+	if (NULL == GameEnded)
+	{
+		printf("Couldn't create thread\n");
+		return 1;
+	}
 	SOCKET client_s;
+	
 	while (1)
 	{ // &client_addr
+		Sleep(0);
+		//printf("THREAD IN MAIN");
 		if (socketCount < 2)
 		{
 			client_s = accept(server_s, NULL, NULL);
@@ -651,7 +695,7 @@ int main(int argc, char* argv[])
 			}
 			allSockets[socketCount] = client_s;
 			socketCount++;
-
+			
 
 			//set descriptors
 			FD_ZERO(&fds);
@@ -679,6 +723,7 @@ int main(int argc, char* argv[])
 				///// CHECK IF THERE ARE NO MORE THN 2 THREADS OR DENY
 					if (openThread(&((Threads)[socketCount-1]), &threadExecute, &client_s, &(threadIDs[0])))
 					{
+						
 						openedsuccessfuly[0] = 0; // if thread wasnt opened successfully
 						printf("Error with thread %d\n", 0);
 					}
