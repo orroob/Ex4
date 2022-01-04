@@ -82,6 +82,7 @@ int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
 
 int SendString(const char* Str, SOCKET sd)
 {
+	//Sleep(5000); ////////////   NEW CHECK
 	/* Send the the request to the server on socket sd */
 	int TotalStringSizeInBytes;
 	int SendRes;

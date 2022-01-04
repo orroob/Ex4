@@ -314,6 +314,7 @@ int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
 
 int SendString(const char* Str, SOCKET sd)
 {
+	//Sleep(5000);
 	//DWORD timeout = 15;
 	//if (setsockopt(sd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof timeout) < 0)
 	//	printf("setsockopt failed\n");
@@ -514,7 +515,7 @@ int func(SOCKET *client_s, int index)
 			//send MAIN MENU
 		
 		
-			createAndSendMessage(*client_s, SERVER_MAIN_MENU, NULL, NULL, NULL);
+			createAndSendMessage(*client_s, SERVER_MAIN_MENU, NULL, NULL, NULL);     ///////breaks sometime??????
 			break;
 		case CLIENT_VERSUS:
 			//inc players num 
@@ -543,10 +544,10 @@ int func(SOCKET *client_s, int index)
 			// --------------- need to add mutex------------------------------------
 			printf("Got Here");    //Printed Twicw one after the other
 			WaitForSingleObject(GameEnded,INFINITE);
-			
+			/////////////////////////////////////////////////////////////////////////////////////////////////////
 			//threadTurn = decideTurn();
 			//
-			Sleep(0);
+			//Sleep(0);
 			if ((threadTurn = decideTurn()) != index) {
 				continue;
 			}
@@ -579,6 +580,7 @@ int func(SOCKET *client_s, int index)
 				
 				createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
 				createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
+				createAndSendMessage(allSockets[(threadTurn + 1) % 2], SERVER_MOVE_REQUEST, NULL, NULL, NULL); // NEW TRY
 				// --------------- need to release mutex------------------------------------
 				continue;
 			}
@@ -682,45 +684,43 @@ int main(int argc, char* argv[])
 	SOCKET client_s;
 	
 	while (1)
-	{ // &client_addr
+	{ 
 		Sleep(0);
-		//printf("THREAD IN MAIN");
 		if (socketCount < 2)
 		{
 			client_s = accept(server_s, NULL, NULL);
 			if (client_s == INVALID_SOCKET)
 			{
 				printf("Accepting connection with client failed, error %ld\n", WSAGetLastError());
-				//goto server_cleanup_3;
+				
 			}
 			allSockets[socketCount] = client_s;
 			socketCount++;
-			
-
 			//set descriptors
 			FD_ZERO(&fds);
 			FD_SET(client_s, &fds);
 
-			retval = select(max(server_s, stdin) + 1, &fds, NULL, NULL, &timeout);
-			if (retval < 0)
-			{//error occured
-				return 1;
-				// check errno/WSAGetLastError(), call perror(), etc ...
-			}
+			//retval = select(max(server_s, stdin) + 1, &fds, NULL, NULL, &timeout);
+			//if (retval < 0)
+			//{//error occured
+			//	return 1;
+			//	// check errno/WSAGetLastError(), call perror(), etc ...
+			//}
 
-			if (retval > 0)
-			{
-				if (FD_ISSET(client_s, &fds))
-				{//data was received from the channel
-				//we will process it (decode) and write it to the output file
-
-					//Receive data from the channel
-					char* recieved = NULL;
-					int Rec;
+			//if (retval > 0)
+			//{
+			//	if (FD_ISSET(client_s, &fds))
+			//	{//data was received from the channel
+			//	//we will process it (decode) and write it to the output file
+			//
+			//		//Receive data from the channel
+					
 					//CLIENT_REQUEST 
 					// 
 					//type = getArgsFromMessage(received, ) --------------------------------------------------------------
 				///// CHECK IF THERE ARE NO MORE THN 2 THREADS OR DENY
+			char* recieved = NULL;
+			int Rec;
 					if (openThread(&((Threads)[socketCount-1]), &threadExecute, &client_s, &(threadIDs[0])))
 					{
 						
@@ -732,13 +732,13 @@ int main(int argc, char* argv[])
 					//Sleep(5000000);
 					//break;
 				}
-			}
-			if (retval == 0)
-			{
-				//TIMEOUT?
-				continue;
-			}
-		}
+			//}
+		//if (retval == 0)
+		//{
+		//	//TIMEOUT?
+		//	continue;
+		//}
+		//}
 	}
 	// Deinitialize Winsock
 	result = WSACleanup();
