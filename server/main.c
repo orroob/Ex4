@@ -42,6 +42,7 @@
 
 // general
 #define MAX_SOCKETS 3
+
 typedef struct Game
 {
 	char* players[MAX_SOCKETS]; //max: two players playing + one player being denied
@@ -57,6 +58,31 @@ HANDLE GlobalSemaphore;
 HANDLE GameManagerHandle;
 HANDLE GameMutex;
 HANDLE StartGameMutex;
+HANDLE Threads[MAX_SOCKETS];
+int openedsuccessfuly[MAX_SOCKETS];
+
+int CleanUpAll()
+{
+	int ToReturn = 0;
+	int result = WSACleanup();
+	if (result != 0) {
+		printf("WSACleanup failed: %d\n", result);
+		ToReturn = 1;
+	}
+	for (int i = 0; i < MAX_SOCKETS; i++)
+	{
+		if (allSockets[i] != NULL)
+			closesocket(allSockets[i]);
+	}
+	for (int i = 0; i < MAX_SOCKETS; i++)
+	{
+		if (Threads[i] != NULL)
+			closesocket(Threads[i]);
+	}
+
+	ToReturn |= (CloseHandle(GlobalSemaphore) || CloseHandle(GameManagerHandle) || CloseHandle(GameMutex) || CloseHandle(StartGameMutex));
+	return ToReturn;
+}
 
 int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 {
@@ -625,9 +651,7 @@ int func(SOCKET *client_s, int index)
 
 int main(int argc, char* argv[])
 {
-	GameManagerHandle = CreateEvent(NULL, TRUE, FALSE, "Game_Manager_Handle");
-
-	if (NULL == GameManagerHandle)
+	if ((GameManagerHandle = CreateEvent(NULL, TRUE, FALSE, "Game_Manager_Handle")) == NULL)
 	{
 		printf("Couldn't create event\n");
 		return 1;
@@ -662,20 +686,9 @@ int main(int argc, char* argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	// Setup timeval variable
-	struct timeval timeout;
-	timeout.tv_sec = 30000;
-	timeout.tv_usec = 0;
-
-	struct fd_set fds;
-
-	HANDLE Threads[2];
+	SOCKET client_s;
 	DWORD threadIDs[10];
-	int openedsuccessfuly[2];
-	int type;
-
-	
-	int retval, received = 0;
+	int retval, received = 0, type;
 	//char buffer[3] = { 0 };
 
 	//wait for data to be sent by the channel WSA_FLAG_OVERLAPPED
@@ -683,84 +696,38 @@ int main(int argc, char* argv[])
 	if (ListenRes == SOCKET_ERROR)
 	{
 		printf("Failed listening on socket, error %ld.\n", WSAGetLastError());
-		//goto server_cleanup_2;
+		return CleanUpAll();
 	}
-	StartGameMutex = CreateMutex(
-		NULL,
-		NULL,
-		"Game_Ended"
-	);
-
-	if (NULL == StartGameMutex)
+	if ((StartGameMutex = CreateMutex(NULL, NULL, "Game_Ended")) == NULL)
 	{
 		printf("Couldn't create thread\n");
-		return 1;
+		return CleanUpAll();
 	}
-	SOCKET client_s;
-	
+
 	while (1)
 	{ 
-		//Sleep(0);
 		if (socketCount < 2)
 		{
 			client_s = accept(server_s, NULL, NULL);
 			if (client_s == INVALID_SOCKET)
 			{
 				printf("Accepting connection with client failed, error %ld\n", WSAGetLastError());
-				
 			}
 			allSockets[socketCount] = client_s;
-			socketCount++;
-			//set descriptors
-			FD_ZERO(&fds);
-			FD_SET(client_s, &fds);
 
-			//retval = select(max(server_s, stdin) + 1, &fds, NULL, NULL, &timeout);
-			//if (retval < 0)
-			//{//error occured
-			//	return 1;
-			//	// check errno/WSAGetLastError(), call perror(), etc ...
-			//}
-
-			//if (retval > 0)
-			//{
-			//	if (FD_ISSET(client_s, &fds))
-			//	{//data was received from the channel
-			//	//we will process it (decode) and write it to the output file
-			//
-			//		//Receive data from the channel
-					
-					//CLIENT_REQUEST 
-					// 
-					//type = getArgsFromMessage(received, ) --------------------------------------------------------------
-				///// CHECK IF THERE ARE NO MORE THN 2 THREADS OR DENY
+			///// CHECK IF THERE ARE NO MORE THN 2 THREADS OR DENY
 			char* recieved = NULL;
 			int Rec;
-					if (openThread(&((Threads)[socketCount-1]), &threadExecute, &client_s, &(threadIDs[0])))
-					{
-						
-						openedsuccessfuly[0] = 0; // if thread wasnt opened successfully
-						printf("Error with thread %d\n", 0);
-					}
-
-					//TURN_SWITCHED 
-					//Sleep(5000000);
-					//break;
-				}
-			//}
-		//if (retval == 0)
-		//{
-		//	//TIMEOUT?
-		//	continue;
-		//}
-		//}
+			if (openThread(&((Threads)[socketCount]), &threadExecute, &client_s, &(threadIDs[0])))
+			{
+				openedsuccessfuly[0] = 0; // if thread wasnt opened successfully
+				printf("Error with thread %d\n", 0);
+			}
+			socketCount++;
+		}
 	}
 	// Deinitialize Winsock
-	result = WSACleanup();
-	if (result != 0) {
-		printf("WSACleanup failed: %d\n", result);
-		return 1;
-	}
+	CleanUpAll();
 	if(!ReleaseSemaphore(GlobalSemaphore, 1, NULL))
 	{
 		printf("problem\n");
