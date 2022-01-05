@@ -480,13 +480,14 @@ int func(SOCKET *client_s, int index)
 	int Rec, type, threadTurn=0, canStartGame, isFirstPlayer = 0;
 	if ((arg = malloc(20 * sizeof(char))) == NULL)
 		return 1;
-	DWORD timeout = 15000000000;
+	DWORD timeout = 15000;
 
 	while (!game_state.game_ended)
 	{
-		//Semaphore 
+		
 		if (setsockopt(*client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
 			printf("setsockopt failed\n");
+		
 		Rec = RecvDataThread(&received, *client_s);      ////////////////DOESNT WORK REC =  0
 		if (Rec == 0)
 			continue;
@@ -498,6 +499,7 @@ int func(SOCKET *client_s, int index)
 		type = transMessageToInt(received, &arg);
 		free(received);
 		received = NULL;
+		
 		switch (type)
 		{
 		case CLIENT_REQUEST:
@@ -528,12 +530,12 @@ int func(SOCKET *client_s, int index)
 			//wait for other player to join (15 sec)
 			
 			if (game_state.players_num < 2) { // if this is the first player- wait forever for the second one
-				createAndSendMessage(allSockets[0], GAME_STARTED, NULL, NULL, NULL);
-				createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[0], NULL, NULL);
-				createAndSendMessage(allSockets[0], SERVER_MOVE_REQUEST, NULL, NULL, NULL);
-				continue; ///////////////////////////////////////////////////////////////////////////// checkkkkk
+				//createAndSendMessage(allSockets[0], GAME_STARTED, NULL, NULL, NULL);
+				//createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[0], NULL, NULL);
+				//createAndSendMessage(allSockets[0], SERVER_MOVE_REQUEST, NULL, NULL, NULL);
+				//continue; ///////////////////////////////////////////////////////////////////////////// checkkkkk
 				isFirstPlayer = 1;
-				//WaitForSingleObject(GameManagerHandle, 150000);
+				WaitForSingleObject(GameManagerHandle, 150000);
 			}
 			if (game_state.players_num >= 2 && !isFirstPlayer)
 			{
@@ -542,7 +544,7 @@ int func(SOCKET *client_s, int index)
 			}
 			
 			canStartGame = (game_state.players_num >= 2);
-			if (!canStartGame)  //returns here
+			if (!canStartGame)  
 			{
 				game_state.players_num--;    
 				createAndSendMessage(*client_s, SERVER_NO_OPPONENTS, NULL, NULL, NULL);
@@ -550,7 +552,7 @@ int func(SOCKET *client_s, int index)
 				continue;
 			}
 			// --------------- need to add mutex------------------------------------
-			printf("Got Here");    //Printed Twicw one after the other
+			printf("Got Here");    
 			WaitForSingleObject(StartGameMutex,INFINITE);
 			/////////////////////////////////////////////////////////////////////////////////////////////////////
 			//threadTurn = decideTurn();
@@ -572,6 +574,7 @@ int func(SOCKET *client_s, int index)
 			{
 				
 				createAndSendMessage(allSockets[threadTurn], SERVER_MOVE_REQUEST, NULL, NULL, NULL);
+				
 			}
 			ReleaseMutex(StartGameMutex);
 
@@ -586,9 +589,12 @@ int func(SOCKET *client_s, int index)
 				createAndSendMessage(allSockets[0], GAME_VIEW, game_state.players[threadTurn], arg, "CONT");
 				createAndSendMessage(allSockets[1], GAME_VIEW, game_state.players[threadTurn], arg, "CONT");
 				
-				createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
-				createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
+				createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL); 
+				createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL); 
 				createAndSendMessage(allSockets[(threadTurn + 1) % 2], SERVER_MOVE_REQUEST, NULL, NULL, NULL); // NEW TRY
+				//createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL); //check delete
+				//createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL); //check delete 
+				//createAndSendMessage(allSockets[threadTurn], SERVER_MOVE_REQUEST, NULL, NULL, NULL); 
 				// --------------- need to release mutex------------------------------------
 				continue;
 			}
@@ -636,7 +642,8 @@ int main(int argc, char* argv[])
 	}
 	// Create and init socket
 	SOCKET server_s;
-	if ((server_s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == INVALID_SOCKET)
+	if ((server_s = WSASocketA(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET)
+	//if ((server_s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == INVALID_SOCKET)
 	{
 		printf("Could not create socket : %d", WSAGetLastError());
 		return 1;
@@ -657,7 +664,7 @@ int main(int argc, char* argv[])
 
 	// Setup timeval variable
 	struct timeval timeout;
-	timeout.tv_sec = 100000000000;
+	timeout.tv_sec = 30000;
 	timeout.tv_usec = 0;
 
 	struct fd_set fds;

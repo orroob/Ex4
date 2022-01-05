@@ -362,7 +362,7 @@ int PlayGame()
 	char* received = NULL, * buffer = NULL;
 	char input[10] = { 0 };
 	int Rec, type;
-	DWORD timeout = 150000;
+	DWORD timeout = 15000;
 	char* name, * otherPlayerMove, * gameStatus;
 	name = malloc(20 * sizeof(char));
 	otherPlayerMove = malloc(20 * sizeof(char));
