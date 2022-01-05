@@ -400,6 +400,14 @@ char* readinput() {    /// NEED TO FREE INPUT
 		strcpy(input + inputlen, tempbuf);
 		inputlen += templen;
 	} while (templen == CHUNK - 1 && tempbuf[CHUNK - 2] != '\n');
+	
+	char* temp = input;
+	while ((temp + 1) != NULL && *temp != '\n')
+	{
+		temp++;
+	}
+	if ((temp + 1) != NULL)
+		*temp = '\0';
 	return input;
 }
 int PlayGame()
@@ -555,16 +563,13 @@ int main(int argc, char* argv[])
 					continue;
 				}
 				if (!strcmp(input, "2")) {
-				Exit:
-					if (createAndSendMessage(CLIENT_DISCONNECT, NULL)) {
-						return 1; // END 
-					}
 					closesocket(client_s);
 					result = WSACleanup();
 					if (result != 0) {
 						printf("WSACleanup failed: %d\n", result);
 						return 1;
 					}
+					return 1;
 				}
 				else
 				{
@@ -596,11 +601,11 @@ get_main_menu:
 		if (transMessageToInt(recieved, NULL, NULL, NULL) == SERVER_MAIN_MENU)
 		{
 			printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
-			gets(input);
+			input = readinput();
 			while (strcmp(input, "2") && strcmp(input, "1"))
 			{
 				printf("Error: Illegal command\nChoose what to do next:\n1. Play against another client\n2. Quit\n");
-				gets(input);
+				input = readinput();
 			}
 			if (!strcmp(input, "1"))//CLIENT_VERSUS
 			{
@@ -609,7 +614,9 @@ get_main_menu:
 				}
 			}
 			if (!strcmp(input, "2")) //DISCONNECT_CLIENT 
-				goto Exit;
+			if (createAndSendMessage(CLIENT_DISCONNECT, NULL)) {
+				return 1; // END 
+			}
 		}
 	}
 	// CLIENT_VERSUS was chosen
