@@ -480,13 +480,14 @@ DWORD WINAPI threadExecute(SOCKET *client_s)
 	struct timeval timeout;
 	timeout.tv_sec = 15;
 	timeout.tv_usec = 0;
-
+	
 	if (setsockopt(*client_s, SOL_SOCKET, SO_RCVTIMEO, &timeout,sizeof timeout) < 0)
 		printf("setsockopt failed\n");
 
 	if (setsockopt(*client_s, SOL_SOCKET, SO_SNDTIMEO, &timeout,sizeof timeout) < 0)
 		printf("setsockopt failed\n");
 	*/
+	
 	printf("Thread_opened\n");
 	func(client_s, socketCount-1);
 }
@@ -628,26 +629,26 @@ int func(SOCKET* client_s, int index)
 	if ((arg = malloc(20 * sizeof(char))) == NULL)
 		return 1;
 	DWORD timeout = 15000;
-
+	SOCKET s = *client_s;
 	while (!game_state.game_ended)
 	{
 		if (game_state.game_started)
 		{
 			if (decideTurn() == index)
 			{
-				if (setsockopt(*client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
+				if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
 					printf("setsockopt failed\n");
-				Rec = RecvDataThread(&received, *client_s);      ////////////////DOESNT WORK REC =  0
+				Rec = RecvDataThread(&received, s);      ////////////////DOESNT WORK REC =  0
 				if (Rec == 0)
 					continue;
 			}
-			Rec = TRNS_SUCCEEDED+1;
+			//Rec = TRNS_SUCCEEDED+1;
 		}
 		else
 		{
-			if (setsockopt(*client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
+			if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
 				printf("setsockopt failed\n");
-			Rec = RecvDataThread(&received, *client_s);      ////////////////DOESNT WORK REC =  0
+			Rec = RecvDataThread(&received,s);      ////////////////DOESNT WORK REC =  0
 			if (Rec == 0)
 				continue;
 		}
@@ -664,11 +665,11 @@ int func(SOCKET* client_s, int index)
 		{
 		case CLIENT_REQUEST:
 			//---------------add mutex before approaching game_state -------------------------------
-			Handle_CLIENT_REQUEST(*client_s, index, arg);
+			Handle_CLIENT_REQUEST(s, index, arg);
 			break;
 		case CLIENT_VERSUS:
 			//wait
-			Handle_CLIENT_VERSUS(*client_s, index);
+			Handle_CLIENT_VERSUS(s, index);
 			//relaese
 			break;
 		case CLIENT_PLAYER_MOVE:
@@ -684,6 +685,7 @@ int func(SOCKET* client_s, int index)
 		default:
 			break;
 		}
+		Rec = 1;
 	}
 }
 

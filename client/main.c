@@ -527,8 +527,8 @@ int main(int argc, char* argv[])
 	while (1) {		//try to connect to server
 		if (connect(client_s, (SOCKADDR*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
 		{
-			printf("Failed to connect to server on %s:%s.\nChoose what to do next:\n1. Try to reconnect\n2. Exit\n", argv[1], argv[2]);
 		get_input:
+			printf("Failed to connect to server on %s:%s.\nChoose what to do next:\n1. Try to reconnect\n2. Exit\n", argv[1], argv[2]);
 			input = readinput();
 			if (!strcmp(input, "1"))
 				continue;
