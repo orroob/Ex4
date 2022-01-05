@@ -48,6 +48,7 @@ typedef struct Game
 	char* players[MAX_SOCKETS]; //max: two players playing + one player being denied
 	int Game_number;
 	int game_ended;
+	int game_started;
 	int players_num;
 }Game;
 
@@ -531,18 +532,20 @@ int Handle_CLIENT_VERSUS(SOCKET client_s, int index)
 		//createAndSendMessage(allSockets[0], GAME_STARTED, NULL, NULL, NULL);
 		//createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[0], NULL, NULL);
 		//createAndSendMessage(allSockets[0], SERVER_MOVE_REQUEST, NULL, NULL, NULL);
-		//continue; ///////////////////////////////////////////////////////////////////////////// checkkkkk
+		//return 0; ///////////////////////////////////////////////////////////////////////////// checkkkkk
 		isFirstPlayer = 1;
 		WaitForSingleObject(StartGameEvent, 150000);
 	}
 	if (game_state.players_num >= 2 && !isFirstPlayer)
 	{
 		SetEvent(StartGameEvent);
+		game_state.game_started = 1;
 		return 0;
 	}
 	canStartGame = (game_state.players_num >= 2);
 	if (!canStartGame)
 	{
+		game_state.game_started = 0;
 		game_state.players_num--;
 		createAndSendMessage(client_s, SERVER_NO_OPPONENTS, NULL, NULL, NULL);
 		createAndSendMessage(client_s, SERVER_MAIN_MENU, NULL, NULL, NULL);
@@ -558,6 +561,7 @@ int Handle_CLIENT_VERSUS(SOCKET client_s, int index)
 	if ((threadTurn = decideTurn()) != index) {
 		return 0;
 	}
+	game_state.game_started = 1;
 	createAndSendMessage(allSockets[0], GAME_STARTED, NULL, NULL, NULL);
 	createAndSendMessage(allSockets[1], GAME_STARTED, NULL, NULL, NULL);
 	printf("GAME_Started from %d index\n", index);
@@ -581,14 +585,14 @@ int HANDLE_CLIENT_PLAYER_MOVE(char* arg)
 		game_state.Game_number++;
 		createAndSendMessage(allSockets[0], GAME_VIEW, game_state.players[threadTurn], arg, "CONT");
 		createAndSendMessage(allSockets[1], GAME_VIEW, game_state.players[threadTurn], arg, "CONT");
-
+		
 		createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
 		createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
-
+		
 		createAndSendMessage(allSockets[(threadTurn + 1) % 2], SERVER_MOVE_REQUEST, NULL, NULL, NULL); // NEW TRY
-		//createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL); //check delete
-		//createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL); //check delete 
-		//createAndSendMessage(allSockets[threadTurn], SERVER_MOVE_REQUEST, NULL, NULL, NULL); 
+	//	createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL); //check delete
+	//	createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL); //check delete 
+	//	createAndSendMessage(allSockets[threadTurn], SERVER_MOVE_REQUEST, NULL, NULL, NULL); 
 		// --------------- need to release mutex------------------------------------
 		return 0;;
 	}
@@ -627,11 +631,26 @@ int func(SOCKET* client_s, int index)
 
 	while (!game_state.game_ended)
 	{
-		if (setsockopt(*client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
-			printf("setsockopt failed\n");
-		Rec = RecvDataThread(&received, *client_s);      ////////////////DOESNT WORK REC =  0
-		if (Rec == 0)
-			continue;
+		if (game_state.game_started)
+		{
+			if (decideTurn() == index)
+			{
+				if (setsockopt(*client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
+					printf("setsockopt failed\n");
+				Rec = RecvDataThread(&received, *client_s);      ////////////////DOESNT WORK REC =  0
+				if (Rec == 0)
+					continue;
+			}
+			Rec = TRNS_SUCCEEDED+1;
+		}
+		else
+		{
+			if (setsockopt(*client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
+				printf("setsockopt failed\n");
+			Rec = RecvDataThread(&received, *client_s);      ////////////////DOESNT WORK REC =  0
+			if (Rec == 0)
+				continue;
+		}
 		if (Rec != TRNS_SUCCEEDED) {
 			continue;
 			//free(received);

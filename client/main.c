@@ -416,7 +416,7 @@ int PlayGame()
 	char *input;
 	
 	int Rec, type;
-	DWORD timeout = 15000;
+	DWORD timeout = 150000;
 	char* name, * otherPlayerMove, * gameStatus;
 	name = malloc(20 * sizeof(char));
 	otherPlayerMove = malloc(20 * sizeof(char));
@@ -450,6 +450,8 @@ int PlayGame()
 							printf("Enter the next number or boom:\n");
 							input =readinput();
 							//gets(input);   
+							if (setsockopt(client_s, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof timeout) < 0)
+								printf("setsockopt failed\n");
 							if (createAndSendMessage(CLIENT_PLAYER_MOVE, input)) {
 								free(name);
 								free(otherPlayerMove);
