@@ -494,7 +494,7 @@ DWORD WINAPI threadExecute(SOCKET *client_s)
 
 int decideTurn()
 {
-	return game_state.Game_number % 2;
+	return game_state.Game_number % 2;	
 }
 
 int initGame()
@@ -515,7 +515,7 @@ int Handle_CLIENT_REQUEST(SOCKET client_s, int index, char *arg)
 	createAndSendMessage(client_s, SERVER_APPROVED, NULL, NULL, NULL);
 
 	//add player's name to game struct
-	game_state.players[game_state.players_num] = malloc(20 * sizeof(char));
+	game_state.players[index] = malloc(20 * sizeof(char));
 	strcpy(game_state.players[index], arg);
 
 	//send MAIN MENU
@@ -540,7 +540,6 @@ int Handle_CLIENT_VERSUS(SOCKET client_s, int index)
 	if (game_state.players_num >= 2 && !isFirstPlayer)
 	{
 		SetEvent(StartGameEvent);
-		game_state.game_started = 1;
 		return 0;
 	}
 	canStartGame = (game_state.players_num >= 2);
@@ -553,15 +552,16 @@ int Handle_CLIENT_VERSUS(SOCKET client_s, int index)
 		return 0;
 	}
 	// --------------- need to add mutex------------------------------------
-	printf("Got Here");
+	printf("Got Here\n");
 	WaitForSingleObject(StartGameMutex, INFINITE);
 	/////////////////////////////////////////////////////////////////////////////////////////////////////
-	//threadTurn = decideTurn();
+	threadTurn = decideTurn();
 	//
 	//Sleep(0);
-	if ((threadTurn = decideTurn()) != index) {
-		return 0;
-	}
+	
+	//if ((threadTurn = decideTurn()) != index) {
+	//	return 0;
+	//}
 	game_state.game_started = 1;
 	createAndSendMessage(allSockets[0], GAME_STARTED, NULL, NULL, NULL);
 	createAndSendMessage(allSockets[1], GAME_STARTED, NULL, NULL, NULL);
@@ -570,10 +570,10 @@ int Handle_CLIENT_VERSUS(SOCKET client_s, int index)
 	createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL);
 	createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL);
 	// --------------- need to release mutex------------------------------------
-	if (threadTurn == index)
-	{
-		createAndSendMessage(allSockets[threadTurn], SERVER_MOVE_REQUEST, NULL, NULL, NULL);
-	}
+	//if (threadTurn == index)
+	//{
+	createAndSendMessage(allSockets[threadTurn], SERVER_MOVE_REQUEST, NULL, NULL, NULL);
+	//}
 	ReleaseMutex(StartGameMutex);
 	return 0;
 }

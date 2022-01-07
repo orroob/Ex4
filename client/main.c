@@ -410,13 +410,14 @@ char* readinput() {    /// NEED TO FREE INPUT
 		*temp = '\0';
 	return input;
 }
+
 int PlayGame()
 {
 	char* received = NULL, * buffer = NULL;
 	char *input;
 	
 	int Rec, type;
-	DWORD timeout = 150000;
+	DWORD timeout = 1500000;
 	char* name, * otherPlayerMove, * gameStatus;
 	name = malloc(20 * sizeof(char));
 	otherPlayerMove = malloc(20 * sizeof(char));
@@ -523,7 +524,7 @@ int main(int argc, char* argv[])
 	char* recieved = NULL, *input = NULL;
 	//Call the connect function, passing the created socket and the sockaddr_in structure as parameters. Check for general errors.
 	//loop
-	DWORD timeout = 15000;
+	DWORD timeout = 15000000;
 	while (1) {		//try to connect to server
 		if (connect(client_s, (SOCKADDR*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
 		{
