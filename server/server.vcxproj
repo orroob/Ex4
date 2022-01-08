@@ -144,10 +144,12 @@
     <ClCompile Include="FileHandling.c" />
     <ClCompile Include="main.c" />
     <ClCompile Include="ProcessHandling.c" />
+    <ClCompile Include="SendReceiveHandling.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="HardCodedData.h" />
     <ClInclude Include="ProcessHandling.h" />
+    <ClInclude Include="SendReceiveHandling.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -14,52 +14,18 @@
 
 #include "ProcessHandling.h"
 #include "HardCodedData.h"
+#include"SendReceiveHandling.h"
 
-//server messages
-#define SERVER_APPROVED 0
-#define SERVER_DENIED 1
-#define SERVER_MAIN_MENU 2
-#define GAME_STARTED 3
-#define TURN_SWITCH 4
-#define SERVER_MOVE_REQUEST 5
-#define GAME_ENDED 6
-#define SERVER_NO_OPPONENTS 7
-#define GAME_VIEW 8
-#define SERVER_OPPONENT_QUIT 9 
 
-//client messages
-#define CLIENT_REQUEST 0
-#define CLIENT_VERSUS 1
-#define CLIENT_PLAYER_MOVE 2
-#define CLIENT_DISCONNECT 3
 
-//receive options
-#define TRNS_FAILED 0
-#define TRNS_DISCONNECTED 1
-#define TRNS_SUCCEEDED 2
-#define TRNS_TIMEOUT 3
-#define TIME_OUT_ERROR 0
-
-// general
-#define MAX_SOCKETS 3
-
-typedef struct Game
-{
-	char* players[MAX_SOCKETS]; //max: two players playing + one player being denied
-	int Game_number;
-	int game_ended;
-	int game_started;
-	int players_num;
-}Game;
-
+//globals
 Game game_state = { 0 };
 SOCKET allSockets[MAX_SOCKETS];
-int socketCount = 0;
 HANDLE StartGameEvent;
-HANDLE GameMutex;
-HANDLE StartGameMutex;
+HANDLE RestartGameEvent;
+HANDLE GameStsteMutex;
 HANDLE Threads[MAX_SOCKETS];
-int openedsuccessfuly[MAX_SOCKETS];
+int openedsuccessfuly[MAX_SOCKETS], socketCount = 0;
 
 int CleanUpAll()
 {
@@ -81,293 +47,31 @@ int CleanUpAll()
 			closesocket(Threads[i]);
 	}
 
-	ToReturn |= (CloseHandle(StartGameEvent) || CloseHandle(GameMutex) || CloseHandle(StartGameMutex));
+	ToReturn |= (CloseHandle(StartGameEvent) || CloseHandle(GameStsteMutex));// || CloseHandle(StartGameMutex));
 	return ToReturn;
 }
 
-int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
-{
-	char* CurPlacePtr = OutputBuffer;
-	int BytesJustTransferred;
-	int RemainingBytesToReceive = BytesToReceive;
-	int Last_Error_Value = 0;
-	
-	while (RemainingBytesToReceive > 0)
+char* readinput() {    /// NEED TO FREE INPUT
+
+	char* input = NULL;
+	char tempbuf[CHUNK];
+	size_t inputlen = 0, templen = 0;
+	do {
+		fgets(tempbuf, CHUNK, stdin);
+		templen = strlen(tempbuf);
+		input = realloc(input, inputlen + templen + 1);
+		strcpy(input + inputlen, tempbuf);
+		inputlen += templen;
+	} while (templen == CHUNK - 1 && tempbuf[CHUNK - 2] != '\n');
+
+	char* temp = input;
+	while ((temp + 1) != NULL && *temp != '\n')
 	{
-		/* send does not guarantee that the entire message is sent */
-		
-		BytesJustTransferred = recv(sd, CurPlacePtr, RemainingBytesToReceive, 0);
-		if (BytesJustTransferred == SOCKET_ERROR)
-		{
-			Last_Error_Value = WSAGetLastError();
-			if (Last_Error_Value == TIME_OUT_ERROR) {
-				return TRNS_TIMEOUT;
-			}
-			printf("recv() failed, error %d\n", WSAGetLastError());
-			return TRNS_FAILED;
-		}
-		else if (BytesJustTransferred == 0)
-			return TRNS_DISCONNECTED; // recv() returns zero if connection was gracefully disconnected.
-
-		RemainingBytesToReceive -= BytesJustTransferred;
-		CurPlacePtr += BytesJustTransferred; // <ISP> pointer arithmetic
+		temp++;
 	}
-
-	return TRNS_SUCCEEDED;
-}
-
-int ReceiveString(char** OutputStrPtr, SOCKET sd)
-{
-	/* Recv the the request to the server on socket sd */
-	int TotalStringSizeInBytes;
-	int RecvRes;
-	char* StrBuffer = NULL;
-
-	if ((OutputStrPtr == NULL) || (*OutputStrPtr != NULL))
-	{
-		printf("The first input to ReceiveString() must be "
-			"a pointer to a char pointer that is initialized to NULL. For example:\n"
-			"\tchar* Buffer = NULL;\n"
-			"\tReceiveString( &Buffer, ___ )\n");
-		return TRNS_FAILED;
-	}
-
-	/* The request is received in two parts. First the Length of the string (stored in
-	   an int variable ), then the string itself. */
-
-	RecvRes = ReceiveBuffer(
-		(char*)(&TotalStringSizeInBytes),
-		(int)(sizeof(TotalStringSizeInBytes)), // 4 bytes
-		sd);
-
-	if (RecvRes != TRNS_SUCCEEDED) return RecvRes;
-
-	StrBuffer = (char*)malloc(TotalStringSizeInBytes * sizeof(char));
-
-	if (StrBuffer == NULL)
-		return TRNS_FAILED;
-
-	RecvRes = ReceiveBuffer(
-		(char*)(StrBuffer),
-		(int)(TotalStringSizeInBytes),
-		sd);
-
-	if (RecvRes == TRNS_SUCCEEDED)
-	{
-		*OutputStrPtr = StrBuffer;
-	}
-	else
-	{
-		free(StrBuffer);
-	}
-
-	return RecvRes;
-}
-
-int RecvDataThread(char** AcceptedStr, SOCKET client_s)
-{
-	int RecvRes;
-	RecvRes = ReceiveString(AcceptedStr, client_s);
-
-	if (RecvRes == TRNS_FAILED)
-	{
-		printf("Socket error while trying to write data to socket\n");
-		return TRNS_FAILED;
-		//return 0x555;
-	}
-	else if (RecvRes == TRNS_DISCONNECTED)
-	{
-		printf("Server closed connection. Bye!\n");    /////MAKES INFINITE LOOOP
-		return TRNS_DISCONNECTED;
-		//return 0x555;
-	}
-	else if (RecvRes == TRNS_TIMEOUT) {
-		printf("Server timedout. Bye!\n");
-		return TRNS_TIMEOUT;
-		//return 0x555;
-	}
-	return TRNS_SUCCEEDED;
-}
-
-char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3) // need to reduce lines------------------
-{
-	char* buffer;
-	int buffSize;
-	switch (messageType)
-	{
-	case SERVER_APPROVED:
-		if ((buffSize = snprintf(NULL, 0, "SERVER_APPROVED\n")) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
-		{
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_APPROVED\n");
-		break;
-	case SERVER_DENIED:
-		if ((buffSize = snprintf(NULL, 0, "SERVER_DENIED\n")) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
-		{
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_DENIED\n");
-		break;
-	case SERVER_MAIN_MENU:
-		if ((buffSize = snprintf(NULL, 0, "SERVER_MAIN_MENU:%s\n", arg1)) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
-		{
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_MAIN_MENU\n");
-		break;
-	case GAME_STARTED:
-		if ((buffSize = snprintf(NULL, 0, "GAME_STARTED\n")) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
-		{
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "GAME_STARTED\n");
-		break;
-	case TURN_SWITCH:
-		if ((buffSize = snprintf(NULL, 0, "TURN_SWITCH:%s\n", arg1)) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
-		{
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "TURN_SWITCH:%s\n", arg1);
-		break;
-	case SERVER_MOVE_REQUEST:
-		if ((buffSize = snprintf(NULL, 0, "SERVER_MOVE_REQUEST\n")) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
-		{
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_MOVE_REQUEST\n");
-		break;
-	case GAME_ENDED:
-		if ((buffSize = snprintf(NULL, 0, "GAME_ENDED:%s\n", arg1)) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
-		{
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "GAME_ENDED:%s\n", arg1);
-		break;
-	case SERVER_NO_OPPONENTS:
-		if ((buffSize = snprintf(NULL, 0, "SERVER_NO_OPPONENTS\n")) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
-		{
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_NO_OPPONENTS\n");
-		break;
-	case GAME_VIEW:
-		if ((buffSize = snprintf(NULL, 0, "GAME_VIEW:%s;%s;%s\n", arg1, arg2, arg3)) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
-		{
-			return NULL;  
-		}
-		sprintf_s(buffer, buffSize + 1, "GAME_VIEW:%s;%s;%s\n", arg1, arg2, arg3);
-		break;
-	case SERVER_OPPONENT_QUIT:
-		if ((buffSize = snprintf(NULL, 0, "SERVER_OPPONENT_QUIT:%s\n", arg1)) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
-		{
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_OPPONENT_QUIT\n");
-		break;
-	default:
-		buffer = NULL;
-	}
-	return buffer;
-}
-
-int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
-{
-	const char* CurPlacePtr = Buffer;
-	int BytesTransferred;
-	int RemainingBytesToSend = BytesToSend;
-	int Last_Error_Value;
-	while (RemainingBytesToSend > 0)
-	{
-		/* send does not guarantee that the entire message is sent */
-		BytesTransferred = send(sd, CurPlacePtr, RemainingBytesToSend, 0);
-		if (BytesTransferred == SOCKET_ERROR)
-		{
-			Last_Error_Value = WSAGetLastError();
-			if (Last_Error_Value == TIME_OUT_ERROR) {
-				return TRNS_TIMEOUT;
-			}
-			printf("send() failed, error %d\n", WSAGetLastError());
-			return TRNS_FAILED;
-		}
-
-		RemainingBytesToSend -= BytesTransferred;
-		CurPlacePtr += BytesTransferred; // <ISP> pointer arithmetic
-	}
-
-	return TRNS_SUCCEEDED;
-}
-
-int SendString(const char* Str, SOCKET sd)
-{
-	//Sleep(5000);
-	//DWORD timeout = 15;
-	//if (setsockopt(sd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof timeout) < 0)
-	//	printf("setsockopt failed\n");
-
-	/* Send the the request to the server on socket sd */
-	int TotalStringSizeInBytes;
-	int SendRes;
-
-	/* The request is sent in two parts. First the Length of the string (stored in
-	   an int variable ), then the string itself. */
-
-	TotalStringSizeInBytes = (int)(strlen(Str) + 1); // terminating zero also sent	
-
-	SendRes = SendBuffer(
-		(const char*)(&TotalStringSizeInBytes),
-		(int)(sizeof(TotalStringSizeInBytes)), // sizeof(int) 
-		sd);
-
-	if (SendRes != TRNS_SUCCEEDED) return SendRes;
-
-	SendRes = SendBuffer(
-		(const char*)(Str),
-		(int)(TotalStringSizeInBytes),
-		sd);
-
-	return SendRes;
+	if ((temp + 1) != NULL)
+		*temp = '\0';
+	return input;
 }
 
 int containsDigit(int number) // gets str and checks there is no 7 in it or 7 doesnt divide the number
@@ -416,7 +120,7 @@ int LEGAL_MOVE(char* next_move) {
 			return 1;
 		}
 	}
-	printf("FORGOT ssssssss");
+	printf("FORGOT ssssssss\n");
 	return 0;
 }
 
@@ -449,6 +153,7 @@ int getArgsFromMessage(char* message, char** arg1)
 		strcpy(*arg1, temp + 1);    //////////// WORKed AFTER I USED MALLOC FOR NEXT_MOVE  NEED TO FREE
 		return CLIENT_PLAYER_MOVE;
 	}
+	return -1;
 }
 
 int transMessageToInt(char* message, char** arg1)
@@ -461,16 +166,16 @@ int transMessageToInt(char* message, char** arg1)
 	return getArgsFromMessage(message, arg1);
 }
 
-int createAndSendMessage(SOCKET client_s, int messageType, char* arg1, char* arg2, char* arg3)
+DWORD WINAPI ResatartGame()
 {
-	char* send;
-	send = PrepareMessage(messageType, arg1, arg2, arg3);
-	if (SendString(send, client_s) != TRNS_SUCCEEDED) {
-		printf("Failed to send Server approved");
-		return 1;
+	while (1)
+	{
+		if (game_state.game_ended)
+		{
+			Sleep(2000);
+			SetEvent(RestartGameEvent);
+		}
 	}
-	free(send);
-	return 0;
 }
 
 DWORD WINAPI threadExecute(SOCKET *client_s)
@@ -489,17 +194,23 @@ DWORD WINAPI threadExecute(SOCKET *client_s)
 	*/
 	
 	printf("Thread_opened\n");
-	func(client_s, socketCount-1);
+	SOCKET s = *client_s;
+	int Rec = 0;
+	while(!Rec)
+	{
+		Rec = func(s, socketCount - 1);
+		WaitForSingleObject(RestartGameEvent, (DWORD)1000000);
+		game_state.game_ended = 0;
+		game_state.players_num = 0;
+
+		//createAndSendMessage(s, SERVER_MAIN_MENU, NULL, NULL, NULL);     ///////breaks sometime??????
+	}
+	return 0;
 }
 
 int decideTurn()
 {
 	return game_state.Game_number % 2;	
-}
-
-int initGame()
-{
-	return 0;
 }
 
 int Handle_CLIENT_REQUEST(SOCKET client_s, int index, char *arg)
@@ -515,8 +226,10 @@ int Handle_CLIENT_REQUEST(SOCKET client_s, int index, char *arg)
 	createAndSendMessage(client_s, SERVER_APPROVED, NULL, NULL, NULL);
 
 	//add player's name to game struct
+	WaitForSingleObject(GameStsteMutex, INFINITE);
 	game_state.players[index] = malloc(20 * sizeof(char));
 	strcpy(game_state.players[index], arg);
+	ReleaseMutex(GameStsteMutex);
 
 	//send MAIN MENU
 	createAndSendMessage(client_s, SERVER_MAIN_MENU, NULL, NULL, NULL);     ///////breaks sometime??????
@@ -553,7 +266,7 @@ int Handle_CLIENT_VERSUS(SOCKET client_s, int index)
 	}
 	// --------------- need to add mutex------------------------------------
 	printf("Got Here\n");
-	WaitForSingleObject(StartGameMutex, INFINITE);
+	WaitForSingleObject(GameStsteMutex, INFINITE);
 	/////////////////////////////////////////////////////////////////////////////////////////////////////
 	threadTurn = decideTurn();
 	//
@@ -574,7 +287,7 @@ int Handle_CLIENT_VERSUS(SOCKET client_s, int index)
 	//{
 	createAndSendMessage(allSockets[threadTurn], SERVER_MOVE_REQUEST, NULL, NULL, NULL);
 	//}
-	ReleaseMutex(StartGameMutex);
+	ReleaseMutex(GameStsteMutex);
 	return 0;
 }
 
@@ -597,7 +310,6 @@ int HANDLE_CLIENT_PLAYER_MOVE(char* arg)
 		// --------------- need to release mutex------------------------------------
 		return 0;;
 	}
-	game_state.game_ended = 1;
 	createAndSendMessage(allSockets[0], GAME_VIEW, game_state.players[threadTurn], arg, "END");
 	createAndSendMessage(allSockets[1], GAME_VIEW, game_state.players[threadTurn], arg, "END");
 
@@ -608,6 +320,9 @@ int HANDLE_CLIENT_PLAYER_MOVE(char* arg)
 
 	createAndSendMessage(allSockets[0], SERVER_MAIN_MENU, NULL, NULL, NULL);
 	createAndSendMessage(allSockets[1], SERVER_MAIN_MENU, NULL, NULL, NULL);
+
+	game_state.game_ended = 1;
+	game_state.game_started = 0;
 	return 0;
 }
 
@@ -622,18 +337,21 @@ int HANDLE_CLIENT_DISCONNECT(int index, char* arg)
 	return 0;
 }
 
-int func(SOCKET* client_s, int index)
+int func(SOCKET s, int index)
 {
 	char* received = NULL, * arg;
 	int Rec, type, threadTurn = 0, canStartGame, isFirstPlayer = 0;
 	if ((arg = malloc(20 * sizeof(char))) == NULL)
 		return 1;
 	DWORD timeout = 15000;
-	SOCKET s = *client_s;
+
 	while (!game_state.game_ended)
 	{
 		if (game_state.game_started)
 		{
+			// reset the restart-game Event
+			ResetEvent(RestartGameEvent);
+
 			if (decideTurn() == index)
 			{
 				if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
@@ -674,9 +392,9 @@ int func(SOCKET* client_s, int index)
 			break;
 		case CLIENT_PLAYER_MOVE:
 			// --------------- need to add mutex------------------------------------
-			//WaitForSingleObject(StartGameMutex, INFINITE);
+			WaitForSingleObject(GameStsteMutex, INFINITE);
 			HANDLE_CLIENT_PLAYER_MOVE(arg);
-			//ReleaseMutex(StartGameMutex);
+			ReleaseMutex(GameStsteMutex);
 			// --------------- need to release mutex------------------------------------
 			break;
 		case CLIENT_DISCONNECT:
@@ -687,16 +405,22 @@ int func(SOCKET* client_s, int index)
 		}
 		Rec = 1;
 	}
+	free(received);
+	free(arg);
+	return 0;
 }
 
 int main(int argc, char* argv[])
 {
-	if ((StartGameEvent = CreateEvent(NULL, TRUE, FALSE, "Game_Manager_Handle")) == NULL)
-	{
+	if ((StartGameEvent = CreateEvent(NULL, TRUE, FALSE, NULL)) == NULL){
 		printf("Couldn't create event\n");
 		return 1;
 	}
-
+	if ((RestartGameEvent = CreateEvent(NULL, TRUE, FALSE, NULL)) == NULL){
+		printf("Couldn't create event\n");
+		return 1;
+	}
+	
 	WSADATA wsa_data;
 	int result;
 	result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
@@ -718,6 +442,8 @@ int main(int argc, char* argv[])
 	server_addr.sin_port = htons(atoi(argv[1]));
 	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	int client_addrss_len, server_addrss_len = sizeof(server_addr);
+	HANDLE RestartThread;
+	char* exit_input = NULL;
 
 	//Bind
 	if (bind(server_s, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
@@ -728,8 +454,7 @@ int main(int argc, char* argv[])
 
 	SOCKET client_s;
 	DWORD threadIDs[10];
-	int retval, received = 0, type;
-	//char buffer[3] = { 0 };
+	int received = 0, type;
 
 	//wait for data to be sent by the channel WSA_FLAG_OVERLAPPED
 	int ListenRes = listen(server_s, SOMAXCONN);
@@ -738,12 +463,16 @@ int main(int argc, char* argv[])
 		printf("Failed listening on socket, error %ld.\n", WSAGetLastError());
 		return CleanUpAll();
 	}
-	if ((StartGameMutex = CreateMutex(NULL, NULL, "Game_Ended")) == NULL)
+	if ((GameStsteMutex = CreateMutex(NULL, NULL, NULL)) == NULL)
 	{
 		printf("Couldn't create thread\n");
 		return CleanUpAll();
 	}
-
+	if (openThread(&RestartThread, &ResatartGame, NULL, &(threadIDs[0])))
+	{
+		openedsuccessfuly[0] = 0; // if thread wasnt opened successfully
+		printf("Error with thread %d\n", 0);
+	}
 	while (1)
 	{ 
 		if (socketCount < 2)
@@ -757,13 +486,22 @@ int main(int argc, char* argv[])
 
 			///// CHECK IF THERE ARE NO MORE THN 2 THREADS OR DENY
 			char* recieved = NULL;
-			int Rec;
 			if (openThread(&((Threads)[socketCount]), &threadExecute, &client_s, &(threadIDs[0])))
 			{
 				openedsuccessfuly[0] = 0; // if thread wasnt opened successfully
 				printf("Error with thread %d\n", 0);
 			}
-			socketCount++;
+			socketCount++;			
+		}
+		if (_kbhit())
+		{//check if 'exit' was pressed to stdin. if so, send Ack to the channel, close the connection, and close the output file.
+
+			exit_input = readinput();
+			if ((!strcmp(exit_input, "exit")))
+			{//////////////////////////////////////////////////////////////////////////// take care
+				//finish execution
+				break;
+			}
 		}
 	}
 	// Deinitialize Winsock

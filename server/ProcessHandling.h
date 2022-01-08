@@ -1,7 +1,6 @@
 #pragma once
 //This Header file contains all of the declerations for functions connected to Threads which are being used in main.c
-#ifndef HEADER_FILE
-#include "HardCodedData.h"
+#ifndef HEADER_FILE	
 
 /// <summary>
 /// This function creates a process using winAPI's CreateProcessA function.

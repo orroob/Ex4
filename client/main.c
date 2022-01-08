@@ -37,6 +37,8 @@
 #define TRNS_TIMEOUT 3
 #define TIME_OUT_ERROR 0
 #define CHUNK 200
+
+//structures
 typedef struct Game_STATUS
 {
 	char* clientName;
@@ -44,6 +46,7 @@ typedef struct Game_STATUS
 	int gameEnded;
 }GAME;
 
+//globals
 GAME gameStruct;
 SOCKET client_s;
 char clientName[20];
@@ -172,7 +175,6 @@ int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
 
 	return TRNS_SUCCEEDED;
 }
-/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 
 int SendString(const char* Str, SOCKET sd)
 {
@@ -481,7 +483,7 @@ int PlayGame()
 				}
 				break;
 			case GAME_VIEW:
-				printf("%s move was %s\n%s\n", name, otherPlayerMove, gameStatus); //check if both '\n\' are needed ------------------------
+				printf("%s move was %s %s\n", name, otherPlayerMove, gameStatus); //check if both '\n\' are needed ------------------------
 				break;
 			case GAME_ENDED:
 				printf("%s won!\n", name);
@@ -534,7 +536,7 @@ int main(int argc, char* argv[])
 			if (!strcmp(input, "1"))
 				continue;
 			if (!strcmp(input, "2"))
-				break;                     ////////////////////////////////////// NEED TO MAKE
+				return cleanupAll(recieved);  //exit code
 			else
 			{
 				printf("Error: illegal command\n");
@@ -612,13 +614,14 @@ get_main_menu:
 			}
 			if (!strcmp(input, "1"))//CLIENT_VERSUS
 			{
+				Sleep(3000);
 				if (createAndSendMessage(CLIENT_VERSUS, NULL)) {
 					return 1; // END 
 				}
 			}
 			if (!strcmp(input, "2")) //DISCONNECT_CLIENT 
-			if (createAndSendMessage(CLIENT_DISCONNECT, NULL)) {
-				return 1; // END 
+				if (createAndSendMessage(CLIENT_DISCONNECT, NULL)) {
+					return 1; // END 
 			}
 		}
 	}
@@ -652,5 +655,6 @@ get_main_menu:
 			goto get_main_menu;
 		}
 	}
+	goto get_main_menu;	
 	cleanupAll(recieved);
 }
