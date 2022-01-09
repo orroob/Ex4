@@ -12,7 +12,38 @@
 #include <string.h> 
 #pragma comment(lib, "Ws2_32.lib")
 #include "HardCodedData.h"
+#include "SendReceiveHandling.h"
 
+//server messages
+#define SERVER_APPROVED 0
+#define SERVER_DENIED 1
+#define SERVER_MAIN_MENU 2
+#define GAME_STARTED 3
+#define TURN_SWITCH 4
+#define SERVER_MOVE_REQUEST 5
+#define GAME_ENDED 6
+#define SERVER_NO_OPPONENTS 7
+#define GAME_VIEW 8
+#define SERVER_OPPONENT_QUIT 9 
+
+//client messages
+#define CLIENT_REQUEST 0
+#define CLIENT_VERSUS 1
+#define CLIENT_PLAYER_MOVE 2
+#define CLIENT_DISCONNECT 3
+
+//receive options
+#define TRNS_FAILED 0
+#define TRNS_DISCONNECTED 1
+#define TRNS_SUCCEEDED 2
+#define TRNS_TIMEOUT 3
+#define TIME_OUT_ERROR 0
+
+// general
+#define MAX_SOCKETS 3
+#define CHUNK 200
+#define READ 0
+#define WRITE 1
 
 //globals
 GAME gameStruct;
@@ -28,64 +59,6 @@ int cleanupAll(char* recieved) {
 	closesocket(client_s);
 	free(recieved);
 	return 0;
-}
-
-int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
-{
-	const char* CurPlacePtr = Buffer;
-	int BytesTransferred;
-	int RemainingBytesToSend = BytesToSend;
-	int Last_Error_Value;
-	while (RemainingBytesToSend > 0)
-	{
-		/* send does not guarantee that the entire message is sent */
-		BytesTransferred = send(sd, CurPlacePtr, RemainingBytesToSend, 0);
-		if (BytesTransferred == SOCKET_ERROR)
-		{
-			
-			return SOCKET_ERROR;
-			Last_Error_Value = WSAGetLastError();
-			if (Last_Error_Value == TIME_OUT_ERROR) {
-				//printf("Server disconnected. Exiting.\n");
-				return TRNS_TIMEOUT;
-			}
-		
-			//printf("send() failed, error %d\n", WSAGetLastError());
-			return TRNS_FAILED;
-		}
-
-		RemainingBytesToSend -= BytesTransferred;
-		CurPlacePtr += BytesTransferred; // <ISP> pointer arithmetic
-	}
-
-	return TRNS_SUCCEEDED;
-}
-
-int SendString(const char* Str, SOCKET sd)
-{
-	//Sleep(5000); ////////////   NEW CHECK
-	/* Send the the request to the server on socket sd */
-	int TotalStringSizeInBytes;
-	int SendRes;
-
-	/* The request is sent in two parts. First the Length of the string (stored in
-	   an int variable ), then the string itself. */
-
-	TotalStringSizeInBytes = (int)(strlen(Str) + 1); // terminating zero also sent	
-
-	SendRes = SendBuffer(
-		(const char*)(&TotalStringSizeInBytes),
-		(int)(sizeof(TotalStringSizeInBytes)), // sizeof(int) 
-		sd);
-
-	if (SendRes != TRNS_SUCCEEDED) return SendRes;
-
-	SendRes = SendBuffer(
-		(const char*)(Str),
-		(int)(TotalStringSizeInBytes),
-		sd);
-
-	return SendRes;
 }
 
 int getArgsFromMessage(char* message, char **arg1, char** arg2, char** arg3)
@@ -107,7 +80,7 @@ int getArgsFromMessage(char* message, char **arg1, char** arg2, char** arg3)
 
 	if (!strcmp(mType, "GAME_ENDED"))
 	{
-		temp1 = strchr(temp + 1, ';');
+		temp1 = strchr(temp + 1, '\n');
 		if (temp1 != NULL)
 			*temp1 = '\0';
 		strcpy(*arg1, temp + 1);
@@ -159,122 +132,6 @@ int transMessageToInt(char* message, char** arg1, char** arg2, char** arg3)
 	return getArgsFromMessage(message, arg1, arg2, arg3);
 }
 
-int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
-{
-	char* CurPlacePtr = OutputBuffer;
-	int BytesJustTransferred;
-	int RemainingBytesToReceive = BytesToReceive;
-	int Last_Error_Value = 0;
-	while (RemainingBytesToReceive > 0)
-	{
-		/* send does not guarantee that the entire message is sent */
-		BytesJustTransferred = recv(sd, CurPlacePtr, RemainingBytesToReceive, 0);
-		if (BytesJustTransferred == SOCKET_ERROR)
-		{
-			Last_Error_Value = WSAGetLastError();
-			if (Last_Error_Value == TIME_OUT_ERROR) {
-				return TRNS_TIMEOUT;
-			}
-			printf("recv() failed, error %d\n", WSAGetLastError());
-			return TRNS_FAILED;
-		}
-		else if (BytesJustTransferred == 0)
-			return TRNS_DISCONNECTED; // recv() returns zero if connection was gracefully disconnected.
-
-		RemainingBytesToReceive -= BytesJustTransferred;
-		CurPlacePtr += BytesJustTransferred; // <ISP> pointer arithmetic
-	}
-
-	return TRNS_SUCCEEDED;
-}
-
-int ReceiveString(char** OutputStrPtr, SOCKET sd)
-{
-	/* Recv the the request to the server on socket sd */
-	int TotalStringSizeInBytes;
-	int RecvRes;
-	char* StrBuffer = NULL;
-
-	if ((OutputStrPtr == NULL) || (*OutputStrPtr != NULL))
-	{
-		printf("The first input to ReceiveString() must be "
-			"a pointer to a char pointer that is initialized to NULL. For example:\n"
-			"\tchar* Buffer = NULL;\n"
-			"\tReceiveString( &Buffer, ___ )\n");
-		return TRNS_FAILED;
-	}
-
-	/* The request is received in two parts. First the Length of the string (stored in
-	   an int variable ), then the string itself. */
-
-	RecvRes = ReceiveBuffer(
-		(char*)(&TotalStringSizeInBytes),
-		(int)(sizeof(TotalStringSizeInBytes)), // 4 bytes
-		sd);
-
-	if (RecvRes != TRNS_SUCCEEDED) return RecvRes;
-
-	StrBuffer = (char*)malloc(TotalStringSizeInBytes * sizeof(char));
-
-	if (StrBuffer == NULL)
-		return TRNS_FAILED;
-
-	RecvRes = ReceiveBuffer(
-		(char*)(StrBuffer),
-		(int)(TotalStringSizeInBytes),
-		sd);
-
-	if (RecvRes == TRNS_SUCCEEDED)
-	{
-		*OutputStrPtr = StrBuffer;
-	}
-	else
-	{
-		free(StrBuffer);
-	}
-
-	return RecvRes;
-}
-
-int RecvDataThread(char** AcceptedStr)
-{
-	int RecvRes;
-
-		RecvRes = ReceiveString(AcceptedStr, client_s);
-
-		if (RecvRes == TRNS_FAILED)
-		{
-			printf("Socket error while trying to write data to socket\n");
-			return TRNS_FAILED;
-			//return 0x555;
-		}
-		else if (RecvRes == TRNS_DISCONNECTED)
-		{
-			printf("Server closed connection. Bye!\n");
-			return TRNS_DISCONNECTED;
-			//return 0x555;
-		}
-		else if (RecvRes == TRNS_TIMEOUT) {
-			printf("Server timedout. Bye!\n");
-			return TRNS_TIMEOUT;
-			//return 0x555;
-		}
-		return TRNS_SUCCEEDED;
-		//else if (!strcmp (AcceptedStr,"SERVER_DENIED")) {
-		//	printf("Server on %s:%s denied the connection request.\nChoose what to do next:\n1. Try to reconnect\n2. Exit\n", arg1, arg2);
-		//	return TRNS_SUCCEEDED;
-		//	//return 0x555;
-		//}
-		//else if (!strcmp(AcceptedStr,"SERVER_APPROVED"))
-		//{
-		//	printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
-		//	return TRNS_SUCCEEDED;
-		//}
-
-		//free(AcceptedStr);
-		//return 0;
-}
-
 char* readinput() {    /// NEED TO FREE INPUT
 
 	char* input = NULL;
@@ -314,7 +171,7 @@ int PlayGame()
 			//TRUN_SWITCH
 		if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
 			printf("setsockopt failed\n");
-		Rec = RecvDataThread(&received);     ///////////STUCK ON RECV FOR  palyer number 2
+		Rec = RecvDataThread(&received, client_s);     ///////////STUCK ON RECV FOR  palyer number 2
 		if (Rec == TRNS_SUCCEEDED)
 		{
 			type = transMessageToInt(received, &name, &otherPlayerMove, &gameStatus);
@@ -329,7 +186,7 @@ int PlayGame()
 					//SERVER_MOVE_REQUEST
 					if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
 						printf("setsockopt failed\n");
-					Rec = RecvDataThread(&received);
+					Rec = RecvDataThread(&received, client_s);
 					if (Rec == TRNS_SUCCEEDED)
 					{
 						type = transMessageToInt(received, NULL, NULL , NULL);       
@@ -340,7 +197,7 @@ int PlayGame()
 							//gets(input);   
 							if (setsockopt(client_s, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof timeout) < 0)
 								printf("setsockopt failed\n");
-							if (createAndSendMessage(CLIENT_PLAYER_MOVE, input)) {
+							if (createAndSendMessage(CLIENT_PLAYER_MOVE, input, client_s)) {
 								free(name);
 								free(otherPlayerMove);
 								free(gameStatus);
@@ -430,7 +287,7 @@ int main(int argc, char* argv[])
 		}
 		printf("Connected to server on %s:%s.\n", argv[1], argv[2]);
 		//CLIENT_REQUEST
-		if (createAndSendMessage(CLIENT_REQUEST, argv[3])) {
+		if (createAndSendMessage(CLIENT_REQUEST, argv[3], client_s)) {
 			return 1; // END 
 		 }
 		free(recieved);
@@ -441,7 +298,7 @@ int main(int argc, char* argv[])
 			
 			printf("setsockopt failed\n");
 		}
-		Rec = RecvDataThread(&recieved);
+		Rec = RecvDataThread(&recieved, client_s);
 		if (Rec == TRNS_SUCCEEDED)
 		{
 			if (!strcmp(recieved, "SERVER_DENIED\n"))
@@ -485,7 +342,7 @@ get_main_menu:
 
 		printf("setsockopt failed\n");
 	}
-	Rec = RecvDataThread(&recieved);
+	Rec = RecvDataThread(&recieved, client_s);
 	if (Rec == TRNS_SUCCEEDED)
 	{
 		if (transMessageToInt(recieved, NULL, NULL, NULL) == SERVER_MAIN_MENU)
@@ -500,12 +357,12 @@ get_main_menu:
 			if (!strcmp(input, "1"))//CLIENT_VERSUS
 			{
 				Sleep(3000);
-				if (createAndSendMessage(CLIENT_VERSUS, NULL)) {
+				if (createAndSendMessage(CLIENT_VERSUS, NULL, client_s)) {
 					return 1; // END 
 				}
 			}
 			if (!strcmp(input, "2")) //DISCONNECT_CLIENT 
-				if (createAndSendMessage(CLIENT_DISCONNECT, NULL)) {
+				if (createAndSendMessage(CLIENT_DISCONNECT, NULL, client_s)) {
 					return 1; // END 
 			}
 		}
@@ -516,7 +373,7 @@ get_main_menu:
 	DWORD timeout2 = 30000; //Wait for 30 seconds for a chance to get an opponent
 	if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout2, sizeof timeout2) < 0)
 		printf("setsockopt failed\n");
-	Rec = RecvDataThread(&recieved);     
+	Rec = RecvDataThread(&recieved, client_s);
 	if (Rec == TRNS_SUCCEEDED)
 	{
 		if ((type=transMessageToInt(recieved, NULL, NULL, NULL)) == GAME_STARTED)   

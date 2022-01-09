@@ -16,7 +16,8 @@
 #include "HardCodedData.h"
 #include"SendReceiveHandling.h"
 
-
+#define SENT 0
+#define RECEIVED 1
 
 //globals
 Game game_state = { 0 };
@@ -25,6 +26,7 @@ HANDLE StartGameEvent;
 HANDLE RestartGameEvent;
 HANDLE GameStsteMutex;
 HANDLE Threads[MAX_SOCKETS];
+HANDLE LogFile;
 int openedsuccessfuly[MAX_SOCKETS], socketCount = 0;
 
 int CleanUpAll()
@@ -44,13 +46,17 @@ int CleanUpAll()
 	for (int i = 0; i < MAX_SOCKETS; i++)
 	{
 		if (Threads[i] != NULL)
-			closesocket(Threads[i]);
+			closeFile(Threads[i]);
 	}
 
 	ToReturn |= (CloseHandle(StartGameEvent) || CloseHandle(GameStsteMutex));// || CloseHandle(StartGameMutex));
 	return ToReturn;
 }
 
+/// <summary>
+/// This function gets input from the user, in unknown length.
+/// </summary>
+/// <returns>The user's input.</returns>
 char* readinput() {    /// NEED TO FREE INPUT
 
 	char* input = NULL;
@@ -74,6 +80,11 @@ char* readinput() {    /// NEED TO FREE INPUT
 	return input;
 }
 
+/// <summary>
+/// This function checks if a number should be turned to 'boon' according to 7-boom rools.
+/// </summary>
+/// <param name="number"> - an int</param>
+/// <returns>Returns whether or not the number should be turned to 'boon'</returns>
 int containsDigit(int number) // gets str and checks there is no 7 in it or 7 doesnt divide the number
 {
 	if (number == 0)
@@ -92,6 +103,11 @@ int containsDigit(int number) // gets str and checks there is no 7 in it or 7 do
 	return 0;
 }
 
+/// <summary>
+/// This function chaecks if the string equals to "boom"
+/// </summary>
+/// <param name="input">string</param>
+/// <returns></returns>
 int containsBOOM(char* input) {
 	char BOOM[5] = "boom";
 	if (!strcmp(BOOM, input)) {
@@ -100,6 +116,11 @@ int containsBOOM(char* input) {
 	return 0;
 }
 
+/// <summary>
+/// This function decides whether or not a move is legal.
+/// </summary>
+/// <param name="next_move"> - the next move.</param>
+/// <returns></returns>
 int LEGAL_MOVE(char* next_move) {
 	//int legal_move = Game_number+1;
 	//if (containsDigit(legal_move)) {
@@ -124,6 +145,12 @@ int LEGAL_MOVE(char* next_move) {
 	return 0;
 }
 
+/// <summary>
+/// This function places the argument received from the client in arg1.
+/// </summary>
+/// <param name="message"> - the message received from the client.</param>
+/// <param name="arg1"> - a pointer to char* object, where the argument will be placed.</param>
+/// <returns></returns>
 int getArgsFromMessage(char* message, char** arg1)
 {
 	char mType[20] = { 0 };
@@ -156,6 +183,12 @@ int getArgsFromMessage(char* message, char** arg1)
 	return -1;
 }
 
+/// <summary>
+/// This function get a message, returns its type and places its argument in arg1.
+/// </summary>
+/// <param name="message"></param>
+/// <param name="arg1"></param>
+/// <returns></returns>
 int transMessageToInt(char* message, char** arg1)
 {
 	if (!strcmp(message, "CLIENT_VERSUS\n"))
@@ -166,6 +199,10 @@ int transMessageToInt(char* message, char** arg1)
 	return getArgsFromMessage(message, arg1);
 }
 
+/// <summary>
+/// This function is ran by a thread in the background and signals - RestartGameEvent when a game is over.
+/// </summary>
+/// <returns></returns>
 DWORD WINAPI ResatartGame()
 {
 	while (1)
@@ -178,6 +215,11 @@ DWORD WINAPI ResatartGame()
 	}
 }
 
+/// <summary>
+/// This function is ran in a seperate thread for every client and manages the comunication with it.
+/// </summary>
+/// <param name="client_s"> - a pointer to a socket received from accept function.</param>
+/// <returns></returns>
 DWORD WINAPI threadExecute(SOCKET *client_s)
 {
 	Sleep(0);
@@ -198,21 +240,32 @@ DWORD WINAPI threadExecute(SOCKET *client_s)
 	int Rec = 0;
 	while(!Rec)
 	{
-		Rec = func(s, socketCount - 1);
+		Rec = PlayGame(s, socketCount - 1);
 		WaitForSingleObject(RestartGameEvent, (DWORD)1000000);
 		game_state.game_ended = 0;
-		game_state.players_num = 0;
-
+		game_state.players_num--;
+		game_state.Game_number = 0;
 		//createAndSendMessage(s, SERVER_MAIN_MENU, NULL, NULL, NULL);     ///////breaks sometime??????
 	}
 	return 0;
 }
 
+/// <summary>
+/// this function decides which thread's turn it is.
+/// </summary>
+/// <returns></returns>
 int decideTurn()
 {
 	return game_state.Game_number % 2;	
 }
 
+/// <summary>
+/// This function manages the comunication with the client when receiving CLIENT_REQUEST.
+/// </summary>
+/// <param name="client_s"></param>
+/// <param name="index"></param>
+/// <param name="arg"></param>
+/// <returns></returns>
 int Handle_CLIENT_REQUEST(SOCKET client_s, int index, char *arg)
 {
 	if (game_state.players_num >= 2)
@@ -236,6 +289,13 @@ int Handle_CLIENT_REQUEST(SOCKET client_s, int index, char *arg)
 	return 0;
 }
 
+/// <summary>
+/// This function manages the comunication with the client when receiving CLIENT_VERSUS.
+/// </summary>
+/// <param name="client_s"></param>
+/// <param name="index"></param>
+/// <param name="arg"></param>
+/// <returns></returns>
 int Handle_CLIENT_VERSUS(SOCKET client_s, int index)
 {
 	int isFirstPlayer = 0, canStartGame = 0, threadTurn;
@@ -248,7 +308,7 @@ int Handle_CLIENT_VERSUS(SOCKET client_s, int index)
 		//createAndSendMessage(allSockets[0], SERVER_MOVE_REQUEST, NULL, NULL, NULL);
 		//return 0; ///////////////////////////////////////////////////////////////////////////// checkkkkk
 		isFirstPlayer = 1;
-		WaitForSingleObject(StartGameEvent, 150000);
+			WaitForSingleObject(StartGameEvent, 150000);
 	}
 	if (game_state.players_num >= 2 && !isFirstPlayer)
 	{
@@ -276,12 +336,18 @@ int Handle_CLIENT_VERSUS(SOCKET client_s, int index)
 	//	return 0;
 	//}
 	game_state.game_started = 1;
-	createAndSendMessage(allSockets[0], GAME_STARTED, NULL, NULL, NULL);
-	createAndSendMessage(allSockets[1], GAME_STARTED, NULL, NULL, NULL);
+	if (createAndSendMessage(allSockets[0], GAME_STARTED, NULL, NULL, NULL))
+		printf("Error\n");
+	if (createAndSendMessage(allSockets[1], GAME_STARTED, NULL, NULL, NULL))
+		printf("Error\n");
+
 	printf("GAME_Started from %d index\n", index);
 
-	createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL);
-	createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL);
+	if (createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL))
+		printf("Error\n");
+	if (createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL))
+		printf("Error\n");
+
 	// --------------- need to release mutex------------------------------------
 	//if (threadTurn == index)
 	//{
@@ -291,6 +357,13 @@ int Handle_CLIENT_VERSUS(SOCKET client_s, int index)
 	return 0;
 }
 
+/// <summary>
+/// This function manages the comunication with the client when receiving CLIENT_PLAYER_MOVE.
+/// </summary>
+/// <param name="client_s"></param>
+/// <param name="index"></param>
+/// <param name="arg"></param>
+/// <returns></returns>
 int HANDLE_CLIENT_PLAYER_MOVE(char* arg)
 {
 	int threadTurn = decideTurn();
@@ -326,6 +399,13 @@ int HANDLE_CLIENT_PLAYER_MOVE(char* arg)
 	return 0;
 }
 
+/// <summary>
+/// This function manages the comunication with the client when receiving CLIENT_DISCONNECT.
+/// </summary>
+/// <param name="client_s"></param>
+/// <param name="index"></param>
+/// <param name="arg"></param>
+/// <returns></returns>
 int HANDLE_CLIENT_DISCONNECT(int index, char* arg)
 {
 	//send other player MAIN_MENU
@@ -337,13 +417,19 @@ int HANDLE_CLIENT_DISCONNECT(int index, char* arg)
 	return 0;
 }
 
-int func(SOCKET s, int index)
+/// <summary>
+/// This function manages the game in front of the clients.
+/// </summary>
+/// <param name="s"></param>
+/// <param name="index"></param>
+/// <returns></returns>
+int PlayGame(SOCKET s, int index)
 {
 	char* received = NULL, * arg;
 	int Rec, type, threadTurn = 0, canStartGame, isFirstPlayer = 0;
 	if ((arg = malloc(20 * sizeof(char))) == NULL)
 		return 1;
-	DWORD timeout = 15000;
+	DWORD timeout = 150000;
 
 	while (!game_state.game_ended)
 	{
@@ -360,7 +446,6 @@ int func(SOCKET s, int index)
 				if (Rec == 0)
 					continue;
 			}
-			//Rec = TRNS_SUCCEEDED+1;
 		}
 		else
 		{
@@ -372,8 +457,6 @@ int func(SOCKET s, int index)
 		}
 		if (Rec != TRNS_SUCCEEDED) {
 			continue;
-			//free(received);
-			//return 1;
 		}
 		type = transMessageToInt(received, &arg);
 		free(received);
@@ -410,6 +493,36 @@ int func(SOCKET s, int index)
 	return 0;
 }
 
+int writeMessageToLogFile(char* buffer, int code) {
+	char* temp = NULL;
+	int sizeOfMessage;
+	if (SENT == code) {
+		sizeOfMessage = snprintf(NULL, 0, "sent to server-%s\n", buffer);
+		if (NULL == (temp = (char*)malloc((sizeOfMessage + 1) * sizeof(char)))) {
+			//printError("Error allocating memory for Log message\n", LogFile, MISC_ERR);
+			return 1;
+		}
+		snprintf(temp, sizeOfMessage + 1, "sent to server-%s\n", buffer);
+	}
+	else {
+		sizeOfMessage = snprintf(NULL, 0, "received from server-%s\n", buffer);
+		if (NULL == (temp = (char*)malloc((sizeOfMessage + 1) * sizeof(char)))) {
+		//	printError("Error allocating memory for Log message\n", h_logFileHandle, MISC_ERR);
+			return 1;
+		}
+		snprintf(temp, sizeOfMessage + 1, "received from server-%s\n", buffer);
+
+	}
+
+	//if (WriteData(&h_logFileHandle, temp, sizeOfMessage + 1)) {
+	//	free(temp);
+	//	return 1;
+	//}
+	free(temp);
+	return 0;
+
+}
+
 int main(int argc, char* argv[])
 {
 	if ((StartGameEvent = CreateEvent(NULL, TRUE, FALSE, NULL)) == NULL){
@@ -437,11 +550,10 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 	struct sockaddr_in server_addr;
-	struct sockaddr_in client_addr;
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(atoi(argv[1]));
 	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	int client_addrss_len, server_addrss_len = sizeof(server_addr);
+	int server_addrss_len = sizeof(server_addr);
 	HANDLE RestartThread;
 	char* exit_input = NULL;
 
@@ -454,7 +566,7 @@ int main(int argc, char* argv[])
 
 	SOCKET client_s;
 	DWORD threadIDs[10];
-	int received = 0, type;
+	int received = 0;
 
 	//wait for data to be sent by the channel WSA_FLAG_OVERLAPPED
 	int ListenRes = listen(server_s, SOMAXCONN);
@@ -505,6 +617,7 @@ int main(int argc, char* argv[])
 		}
 	}
 	// Deinitialize Winsock
+	closeProcess(RestartThread);
 	CleanUpAll();
 	return 0;
 }

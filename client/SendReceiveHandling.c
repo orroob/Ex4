@@ -1,17 +1,154 @@
 #include "HardCodedData.h"
 #include "SendReceiveHandling.h"
 
-int ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
+char* PrepareMessage(int messageType, char* arg1)
+{
+
+	char* buffer;
+	int buffSize;
+	switch (messageType)
+	{
+	case CLIENT_REQUEST:
+		if ((buffSize = snprintf(NULL, 0, "CLIENT_REQUEST:%s\n", arg1)) == 0) //snprintf returns num of characters
+		{
+			return NULL;
+		}
+		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
+		{
+			return NULL;
+		}
+		//printf("prepare m started\n");
+		sprintf_s(buffer, buffSize + 1, "CLIENT_REQUEST:%s\n", arg1);
+		break;
+
+	case CLIENT_VERSUS:
+		if ((buffSize = snprintf(NULL, 0, "CLIENT_VERSUS\n")) == 0) //snprintf returns num of characters
+		{
+			return NULL;
+		}
+
+		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
+		{
+			return NULL;
+		}
+		sprintf_s(buffer, buffSize + 1, "CLIENT_VERSUS\n");
+		break;
+	case CLIENT_PLAYER_MOVE:
+		if ((buffSize = snprintf(NULL, 0, "CLIENT_PLAYER_MOVE:%s\n", arg1)) == 0) //snprintf returns num of characters
+		{
+			return NULL;
+		}
+
+		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
+		{
+			return NULL;
+		}
+		sprintf_s(buffer, buffSize + 1, "CLIENT_PLAYER_MOVE:%s\n", arg1);
+		break;
+	case CLIENT_DISCONNECT:
+		if ((buffSize = snprintf(NULL, 0, "CLIENT_DISCONNECT\n")) == 0) //snprintf returns num of characters
+		{
+			return NULL;
+		}
+
+		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
+		{
+			return NULL;
+		}
+		sprintf_s(buffer, buffSize + 1, "CLIENT_DISCONNECT\n");
+		break;
+	default:
+		buffer = NULL;
+	}
+	return buffer;
+}
+
+int createAndSendMessage(int messageType, char* arg1, SOCKET client_s) {
+	char* buffer;
+	buffer = PrepareMessage(messageType, arg1);
+	if (SendString(buffer, client_s) != TRNS_SUCCEEDED) {
+		printf("Server disconnected. Exiting.\n");
+		//client finishes run and releases +closes all
+		closesocket(client_s);
+		free(buffer);
+		//result = WSACleanup();
+		//if (result != 0) {
+		//	printf("WSACleanup failed: %d\n", result);
+		//	return 1;
+		//}
+		return 1;
+	}
+	free(buffer); //do we really need to free this????
+	return 0;
+}
+
+int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
+{
+	const char* CurPlacePtr = Buffer;
+	int BytesTransferred;
+	int RemainingBytesToSend = BytesToSend;
+	int Last_Error_Value;
+	while (RemainingBytesToSend > 0)
+	{
+		/* send does not guarantee that the entire message is sent */
+		BytesTransferred = send(sd, CurPlacePtr, RemainingBytesToSend, 0);
+		if (BytesTransferred == SOCKET_ERROR)
+		{
+
+			return SOCKET_ERROR;
+			Last_Error_Value = WSAGetLastError();
+			if (Last_Error_Value == TIME_OUT_ERROR) {
+				//printf("Server disconnected. Exiting.\n");
+				return TRNS_TIMEOUT;
+			}
+
+			//printf("send() failed, error %d\n", WSAGetLastError());
+			return TRNS_FAILED;
+		}
+
+		RemainingBytesToSend -= BytesTransferred;
+		CurPlacePtr += BytesTransferred; // <ISP> pointer arithmetic
+	}
+
+	return TRNS_SUCCEEDED;
+}
+
+int SendString(const char* Str, SOCKET sd)
+{
+	//Sleep(5000); ////////////   NEW CHECK
+	/* Send the the request to the server on socket sd */
+	int TotalStringSizeInBytes;
+	int SendRes;
+
+	/* The request is sent in two parts. First the Length of the string (stored in
+	   an int variable ), then the string itself. */
+
+	TotalStringSizeInBytes = (int)(strlen(Str) + 1); // terminating zero also sent	
+
+	SendRes = SendBuffer(
+		(const char*)(&TotalStringSizeInBytes),
+		(int)(sizeof(TotalStringSizeInBytes)), // sizeof(int) 
+		sd);
+
+	if (SendRes != TRNS_SUCCEEDED) return SendRes;
+
+	SendRes = SendBuffer(
+		(const char*)(Str),
+		(int)(TotalStringSizeInBytes),
+		sd);
+
+	return SendRes;
+}
+
+int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 {
 	char* CurPlacePtr = OutputBuffer;
 	int BytesJustTransferred;
 	int RemainingBytesToReceive = BytesToReceive;
 	int Last_Error_Value = 0;
-
 	while (RemainingBytesToReceive > 0)
 	{
 		/* send does not guarantee that the entire message is sent */
-
 		BytesJustTransferred = recv(sd, CurPlacePtr, RemainingBytesToReceive, 0);
 		if (BytesJustTransferred == SOCKET_ERROR)
 		{
@@ -83,6 +220,7 @@ int ReceiveString(char** OutputStrPtr, SOCKET sd)
 int RecvDataThread(char** AcceptedStr, SOCKET client_s)
 {
 	int RecvRes;
+
 	RecvRes = ReceiveString(AcceptedStr, client_s);
 
 	if (RecvRes == TRNS_FAILED)
@@ -93,7 +231,7 @@ int RecvDataThread(char** AcceptedStr, SOCKET client_s)
 	}
 	else if (RecvRes == TRNS_DISCONNECTED)
 	{
-		printf("Server closed connection. Bye!\n");    /////MAKES INFINITE LOOOP
+		printf("Server closed connection. Bye!\n");
 		return TRNS_DISCONNECTED;
 		//return 0x555;
 	}
@@ -103,187 +241,17 @@ int RecvDataThread(char** AcceptedStr, SOCKET client_s)
 		//return 0x555;
 	}
 	return TRNS_SUCCEEDED;
-}
+	//else if (!strcmp (AcceptedStr,"SERVER_DENIED")) {
+	//	printf("Server on %s:%s denied the connection request.\nChoose what to do next:\n1. Try to reconnect\n2. Exit\n", arg1, arg2);
+	//	return TRNS_SUCCEEDED;
+	//	//return 0x555;
+	//}
+	//else if (!strcmp(AcceptedStr,"SERVER_APPROVED"))
+	//{
+	//	printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
+	//	return TRNS_SUCCEEDED;
+	//}
 
-char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3) // need to reduce lines------------------
-{
-	char* buffer;
-	int buffSize;
-	switch (messageType)
-	{
-	case SERVER_APPROVED:
-		if ((buffSize = snprintf(NULL, 0, "SERVER_APPROVED\n")) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL) {
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_APPROVED\n");
-		break;
-	case SERVER_DENIED:
-		if ((buffSize = snprintf(NULL, 0, "SERVER_DENIED\n")) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL) {
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_DENIED\n");
-		break;
-	case SERVER_MAIN_MENU:
-		if ((buffSize = snprintf(NULL, 0, "SERVER_MAIN_MENU:%s\n", arg1)) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL) {
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_MAIN_MENU\n");
-		break;
-	case GAME_STARTED:
-		if ((buffSize = snprintf(NULL, 0, "GAME_STARTED\n")) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL) {
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "GAME_STARTED\n");
-		break;
-	case TURN_SWITCH:
-		if ((buffSize = snprintf(NULL, 0, "TURN_SWITCH:%s\n", arg1)) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL) {
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "TURN_SWITCH:%s\n", arg1);
-		break;
-	case SERVER_MOVE_REQUEST:
-		if ((buffSize = snprintf(NULL, 0, "SERVER_MOVE_REQUEST\n")) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL) {
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_MOVE_REQUEST\n");
-		break;
-	case GAME_ENDED:
-		if ((buffSize = snprintf(NULL, 0, "GAME_ENDED:%s\n", arg1)) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL) {
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "GAME_ENDED:%s\n", arg1);
-		break;
-	case SERVER_NO_OPPONENTS:
-		if ((buffSize = snprintf(NULL, 0, "SERVER_NO_OPPONENTS\n")) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL) {
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_NO_OPPONENTS\n");
-		break;
-	case GAME_VIEW:
-		if ((buffSize = snprintf(NULL, 0, "GAME_VIEW:%s;%s;%s\n", arg1, arg2, arg3)) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL) {
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "GAME_VIEW:%s;%s;%s\n", arg1, arg2, arg3);
-		break;
-	case SERVER_OPPONENT_QUIT:
-		if ((buffSize = snprintf(NULL, 0, "SERVER_OPPONENT_QUIT:%s\n", arg1)) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL) {
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "SERVER_OPPONENT_QUIT\n");
-		break;
-	default:
-		buffer = NULL;
-	}
-	return buffer;
-}
-
-int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
-{
-	const char* CurPlacePtr = Buffer;
-	int BytesTransferred;
-	int RemainingBytesToSend = BytesToSend;
-	int Last_Error_Value;
-	while (RemainingBytesToSend > 0)
-	{
-		/* send does not guarantee that the entire message is sent */
-		BytesTransferred = send(sd, CurPlacePtr, RemainingBytesToSend, 0);
-		if (BytesTransferred == SOCKET_ERROR)
-		{
-			Last_Error_Value = WSAGetLastError();
-			if (Last_Error_Value == TIME_OUT_ERROR) {
-				return TRNS_TIMEOUT;
-			}
-			printf("send() failed, error %d\n", WSAGetLastError());
-			return TRNS_FAILED;
-		}
-
-		RemainingBytesToSend -= BytesTransferred;
-		CurPlacePtr += BytesTransferred; // <ISP> pointer arithmetic
-	}
-
-	return TRNS_SUCCEEDED;
-}
-
-int SendString(const char* Str, SOCKET sd)
-{
-	//Sleep(5000);
-	//DWORD timeout = 15;
-	//if (setsockopt(sd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof timeout) < 0)
-	//	printf("setsockopt failed\n");
-
-	/* Send the the request to the server on socket sd */
-	int TotalStringSizeInBytes;
-	int SendRes;
-
-	/* The request is sent in two parts. First the Length of the string (stored in
-	   an int variable ), then the string itself. */
-
-	TotalStringSizeInBytes = (int)(strlen(Str) + 1); // terminating zero also sent	
-
-	SendRes = SendBuffer(
-		(const char*)(&TotalStringSizeInBytes),
-		(int)(sizeof(TotalStringSizeInBytes)), // sizeof(int) 
-		sd);
-
-	if (SendRes != TRNS_SUCCEEDED) return SendRes;
-
-	SendRes = SendBuffer(
-		(const char*)(Str),
-		(int)(TotalStringSizeInBytes),
-		sd);
-
-	return SendRes;
-}
-
-int createAndSendMessage(SOCKET client_s, int messageType, char* arg1, char* arg2, char* arg3)
-{
-	char* send;
-	send = PrepareMessage(messageType, arg1, arg2, arg3);
-	if (SendString(send, client_s) != TRNS_SUCCEEDED) {
-		printf("Failed to send Server approved");
-		return 1;
-	}
-	free(send);
-	return 0;
+	//free(AcceptedStr);
+	//return 0;
 }
