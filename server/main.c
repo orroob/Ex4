@@ -442,7 +442,7 @@ int PlayGame(SOCKET s, int index)
 				Rec = RecvDataThread(&received, s);
 				if (Rec == 0)
 				{
-					printError("Error receiving from client", , SOCKET_ERR);
+					printError("Error receiving from client", &(LogFiles[index]), SOCKET_ERR);
 				}
 				
 				writeMessageToLogFile(received, RECEIVED, index);
