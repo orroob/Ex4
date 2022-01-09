@@ -445,6 +445,7 @@ int PlayGame(SOCKET s, int index)
 				Rec = RecvDataThread(&received, s);
 				if (Rec == 0)
 					continue;
+				//writeMessageToLogFile(received, RECEIVED);
 			}
 		}
 		else
@@ -454,6 +455,7 @@ int PlayGame(SOCKET s, int index)
 			Rec = RecvDataThread(&received,s);
 			if (Rec == 0)
 				continue;
+			//writeMessageToLogFile(received, RECEIVED);
 		}
 		if (Rec != TRNS_SUCCEEDED) {
 			continue;
@@ -493,34 +495,32 @@ int PlayGame(SOCKET s, int index)
 	return 0;
 }
 
-int writeMessageToLogFile(char* buffer, int code) {
-	char* temp = NULL;
-	int sizeOfMessage;
-	if (SENT == code) {
-		sizeOfMessage = snprintf(NULL, 0, "sent to server-%s\n", buffer);
-		if (NULL == (temp = (char*)malloc((sizeOfMessage + 1) * sizeof(char)))) {
-			//printError("Error allocating memory for Log message\n", LogFile, MISC_ERR);
-			return 1;
-		}
-		snprintf(temp, sizeOfMessage + 1, "sent to server-%s\n", buffer);
-	}
-	else {
-		sizeOfMessage = snprintf(NULL, 0, "received from server-%s\n", buffer);
-		if (NULL == (temp = (char*)malloc((sizeOfMessage + 1) * sizeof(char)))) {
-		//	printError("Error allocating memory for Log message\n", h_logFileHandle, MISC_ERR);
-			return 1;
-		}
-		snprintf(temp, sizeOfMessage + 1, "received from server-%s\n", buffer);
 
-	}
+int WriteData_David(HANDLE* hfile, char* data_to_write, DWORD bytes_to_write) {
+	BOOL bErrorFlag;
+	DWORD dwBytesWritten = 0;
+	bErrorFlag = WriteFile(
+		*hfile,             // open file handle
+		data_to_write,		// start of data to write
+		bytes_to_write,		// number of bytes to write
+		&dwBytesWritten,	// number of bytes that were written
+		NULL);				// no overlapped structure
 
-	//if (WriteData(&h_logFileHandle, temp, sizeOfMessage + 1)) {
-	//	free(temp);
-	//	return 1;
-	//}
-	free(temp);
+	if (FALSE == bErrorFlag)
+	{
+		printf("WriteFile error: \n Terminal failure: Unable to write to file.\n");
+		return 1;
+	}
+	else if (dwBytesWritten != bytes_to_write)
+	{
+		// This is an error because a synchronous write that results in
+		// success (WriteFile returns TRUE) should write all data as
+		// requested. This would not necessarily be the case for
+		// asynchronous writes.
+		printf("WriteFile error: \n dwBytesWritten != dwBytesToWrite\n");
+		return 1;
+	}
 	return 0;
-
 }
 
 int main(int argc, char* argv[])

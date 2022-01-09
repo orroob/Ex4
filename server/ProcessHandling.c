@@ -11,7 +11,7 @@
 /// <returns></returns>
 int openThread(HANDLE *threadHandle, LPTHREAD_START_ROUTINE function, VOID *parameters, LPDWORD *threadID)
 {
-	*threadHandle = CreateThread(NULL, 0, function, parameters, 0, *threadID);
+	*threadHandle = CreateThread(NULL, 0, function, parameters, 0, threadID);
 	if (threadHandle == NULL)
 	{
 		/*printf("Error occured during the creation of thread\n");
