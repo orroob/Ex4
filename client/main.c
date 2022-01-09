@@ -11,46 +11,13 @@
 #include <stdlib.h> 
 #include <string.h> 
 #pragma comment(lib, "Ws2_32.lib")
+#include "HardCodedData.h"
 
-//server messages
-#define SERVER_APPROVED 0
-#define SERVER_DENIED 1
-#define SERVER_MAIN_MENU 2
-#define GAME_STARTED 3
-#define TURN_SWITCH 4
-#define SERVER_MOVE_REQUEST 5
-#define GAME_ENDED 6
-#define SERVER_NO_OPPONENTS 7
-#define GAME_VIEW 8
-#define SERVER_OPPONENT_QUIT 9 
-
-//client messages
-#define CLIENT_REQUEST 0
-#define CLIENT_VERSUS 1
-#define CLIENT_PLAYER_MOVE 2
-#define CLIENT_DISCONNECT 3
-
-//receive options
-#define TRNS_FAILED 0
-#define TRNS_DISCONNECTED 1
-#define TRNS_SUCCEEDED 2
-#define TRNS_TIMEOUT 3
-#define TIME_OUT_ERROR 0
-#define CHUNK 200
-
-//structures
-typedef struct Game_STATUS
-{
-	char* clientName;
-	char* lastMove;
-	int gameEnded;
-}GAME;
 
 //globals
 GAME gameStruct;
 SOCKET client_s;
 char clientName[20];
-
 
 int cleanupAll(char* recieved) {
 	int result = WSACleanup();
@@ -60,88 +27,6 @@ int cleanupAll(char* recieved) {
 	}
 	closesocket(client_s);
 	free(recieved);
-	return 0;
-}
-
-char* PrepareMessage(int messageType, char* arg1)
-{
-
-	char* buffer;
-	int buffSize;
-	switch (messageType)
-	{
-	case CLIENT_REQUEST:
-		if ((buffSize = snprintf(NULL, 0, "CLIENT_REQUEST:%s\n", arg1)) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
-		{
-			return NULL;
-		}
-		//printf("prepare m started\n");
-		sprintf_s(buffer, buffSize + 1, "CLIENT_REQUEST:%s\n", arg1);
-		break;
-
-	case CLIENT_VERSUS:
-		if ((buffSize = snprintf(NULL, 0, "CLIENT_VERSUS\n")) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
-		{
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "CLIENT_VERSUS\n");
-		break;
-	case CLIENT_PLAYER_MOVE:
-		if ((buffSize = snprintf(NULL, 0, "CLIENT_PLAYER_MOVE:%s\n", arg1)) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
-		{
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "CLIENT_PLAYER_MOVE:%s\n", arg1);
-		break;
-	case CLIENT_DISCONNECT:
-		if ((buffSize = snprintf(NULL, 0, "CLIENT_DISCONNECT\n")) == 0) //snprintf returns num of characters
-		{
-			return NULL;
-		}
-
-		if ((buffer = malloc((buffSize + 1) * sizeof(char))) == NULL)
-		{
-			return NULL;
-		}
-		sprintf_s(buffer, buffSize + 1, "CLIENT_DISCONNECT\n");
-		break;
-	default:
-		buffer = NULL;
-	}
-	return buffer;
-}
-
-int createAndSendMessage(int messageType, char* arg1) {
-	char* buffer;
-	int result;
-	buffer = PrepareMessage(messageType, arg1);
-	if (SendString(buffer, client_s) != TRNS_SUCCEEDED) {
-		printf("Server disconnected. Exiting.\n");
-		//client finishes run and releases +closes all
-		closesocket(client_s);
-		free(buffer);
-		//result = WSACleanup();
-		//if (result != 0) {
-		//	printf("WSACleanup failed: %d\n", result);
-		//	return 1;
-		//}
-		return 1;
-	}
-	free(buffer); //do we really need to free this????
 	return 0;
 }
 

@@ -1,7 +1,7 @@
 #pragma once
 //This Header file contains all of the declerations for functions connected to Threads which are being used in main.c
 #ifndef HEADER_FILE	
-
+#include "HardCodedData.h"
 /// <summary>
 /// This function creates a process using winAPI's CreateProcessA function.
 /// </summary>
@@ -10,7 +10,6 @@
 /// <param name="procinfo"> - a pointer to PROCESS_INFORMATION object that receives the process_info data.</param>
 /// <returns>Returns 0 if secceeded, 1 otherwise.</returns>
 int openProcess(char* command, STARTUPINFO* startinfo, PROCESS_INFORMATION* procinfo);
-
 
 /// <summary>
 ///This function creates a Thread using winAPI's CreateThread function.
@@ -29,9 +28,7 @@ int openThread(HANDLE* threadHandle, LPTHREAD_START_ROUTINE function, VOID* para
 /// <returns>Returns 0 if secceeded, 1 otherwise.</returns>
 int closeProcess(HANDLE* hProcess);
 
-
 int openSemaphore(HANDLE* semaphoreh, long initCount, long maxCount, char* name);
-
 
 int openEvent(HANDLE* event, int manualReset, int initState, char* name);
 

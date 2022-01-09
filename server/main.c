@@ -356,7 +356,7 @@ int func(SOCKET s, int index)
 			{
 				if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
 					printf("setsockopt failed\n");
-				Rec = RecvDataThread(&received, s);      ////////////////DOESNT WORK REC =  0
+				Rec = RecvDataThread(&received, s);
 				if (Rec == 0)
 					continue;
 			}
@@ -366,7 +366,7 @@ int func(SOCKET s, int index)
 		{
 			if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
 				printf("setsockopt failed\n");
-			Rec = RecvDataThread(&received,s);      ////////////////DOESNT WORK REC =  0
+			Rec = RecvDataThread(&received,s);
 			if (Rec == 0)
 				continue;
 		}
