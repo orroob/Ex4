@@ -2,13 +2,12 @@
 #include "HardCodedData.h"
 #include"SendReceiveHandling.h"
 
-#define SENT 0
-#define RECEIVED 1
 /*
 EX4
 Philip Dolav 322656273
 Or Roob      212199970
 */
+
 //globals
 Game game_state = { 0 };
 SOCKET allSockets[MAX_SOCKETS];
@@ -16,8 +15,9 @@ HANDLE StartGameEvent;
 HANDLE RestartGameEvent;
 HANDLE GameStsteMutex;
 HANDLE Threads[MAX_SOCKETS];
-HANDLE LogFile;
+HANDLE LogFiles[MAX_SOCKETS];
 int openedsuccessfuly[MAX_SOCKETS], socketCount = 0;
+
 /// <summary>
 /// WSAcleanup, closing socket and freeing 
 /// </summary>
@@ -216,19 +216,6 @@ DWORD WINAPI ResatartGame()
 DWORD WINAPI threadExecute(SOCKET *client_s)
 {
 	Sleep(0);
-	/*
-	struct timeval timeout;
-	timeout.tv_sec = 15;
-	timeout.tv_usec = 0;
-	
-	if (setsockopt(*client_s, SOL_SOCKET, SO_RCVTIMEO, &timeout,sizeof timeout) < 0)
-		printf("setsockopt failed\n");
-
-	if (setsockopt(*client_s, SOL_SOCKET, SO_SNDTIMEO, &timeout,sizeof timeout) < 0)
-		printf("setsockopt failed\n");
-	*/
-	
-	printf("Thread_opened\n");
 	SOCKET s = *client_s;
 	int Rec = 0;
 	while(!Rec)
@@ -238,7 +225,6 @@ DWORD WINAPI threadExecute(SOCKET *client_s)
 		game_state.game_ended = 0;
 		game_state.players_num--;
 		game_state.Game_number = 0;
-		//createAndSendMessage(s, SERVER_MAIN_MENU, NULL, NULL, NULL);     ///////breaks sometime??????
 	}
 	return 0;
 }
@@ -264,12 +250,15 @@ int Handle_CLIENT_REQUEST(SOCKET client_s, int index, char *arg)
 	if (game_state.players_num >= 2)
 	{
 		//server denied
-		createAndSendMessage(client_s, SERVER_DENIED, NULL, NULL, NULL);
+		createAndSendMessage(client_s, SERVER_DENIED, NULL, NULL, NULL, index);
+		//-------------------------write to file send-------------------------------------------
+
 		Sleep(1000);
 		return 0;
 	}
 	//server accepted
-	createAndSendMessage(client_s, SERVER_APPROVED, NULL, NULL, NULL);
+	createAndSendMessage(client_s, SERVER_APPROVED, NULL, NULL, NULL, index);
+	//-------------------------write to file send-------------------------------------------
 
 	//add player's name to game struct
 	WaitForSingleObject(GameStsteMutex, INFINITE);
@@ -277,8 +266,19 @@ int Handle_CLIENT_REQUEST(SOCKET client_s, int index, char *arg)
 	strcpy(game_state.players[index], arg);
 	ReleaseMutex(GameStsteMutex);
 
+	//create log file
+	char* LogFileName;
+	if((LogFileName = malloc((MAX_LOG_MESSAGE + 1)*sizeof(char))) == NULL)
+		return 1;
+	snprintf(LogFileName, MAX_LOG_MESSAGE + 1, "Thread_log_%s.txt", arg);
+	if (openFile(&(LogFiles[index]), LogFileName, WRITE)) {
+		return 1;
+	}
+
 	//send MAIN MENU
-	createAndSendMessage(client_s, SERVER_MAIN_MENU, NULL, NULL, NULL);     ///////breaks sometime??????
+	createAndSendMessage(client_s, SERVER_MAIN_MENU, NULL, NULL, NULL, index);
+	//-------------------------write to file send-------------------------------------------
+
 	return 0;
 }
 
@@ -313,8 +313,11 @@ int Handle_CLIENT_VERSUS(SOCKET client_s, int index)
 	{
 		game_state.game_started = 0;
 		game_state.players_num--;
-		createAndSendMessage(client_s, SERVER_NO_OPPONENTS, NULL, NULL, NULL);
-		createAndSendMessage(client_s, SERVER_MAIN_MENU, NULL, NULL, NULL);
+		createAndSendMessage(client_s, SERVER_NO_OPPONENTS, NULL, NULL, NULL, index);
+		//-------------------------write to file send-------------------------------------------
+
+		createAndSendMessage(client_s, SERVER_MAIN_MENU, NULL, NULL, NULL, index);
+		//-------------------------write to file send-------------------------------------------
 		return 0;
 	}
 	// --------------- need to add mutex------------------------------------
@@ -329,23 +332,27 @@ int Handle_CLIENT_VERSUS(SOCKET client_s, int index)
 	//	return 0;
 	//}
 	game_state.game_started = 1;
-	if (createAndSendMessage(allSockets[0], GAME_STARTED, NULL, NULL, NULL))
+	if (createAndSendMessage(allSockets[0], GAME_STARTED, NULL, NULL, NULL, 0))
 		printf("Error\n");
-	if (createAndSendMessage(allSockets[1], GAME_STARTED, NULL, NULL, NULL))
+	//-------------------------write to file send-------------------------------------------
+
+	if (createAndSendMessage(allSockets[1], GAME_STARTED, NULL, NULL, NULL, 1))
 		printf("Error\n");
+	//-------------------------write to file send-------------------------------------------
 
 	printf("GAME_Started from %d index\n", index);
 
-	if (createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL))
+	if (createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL, 0))
 		printf("Error\n");
-	if (createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL))
-		printf("Error\n");
+	//-------------------------write to file send-------------------------------------------
 
-	// --------------- need to release mutex------------------------------------
-	//if (threadTurn == index)
-	//{
-	createAndSendMessage(allSockets[threadTurn], SERVER_MOVE_REQUEST, NULL, NULL, NULL);
-	//}
+	if (createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL, 1))
+		printf("Error\n");
+	//-------------------------write to file send-------------------------------------------
+
+	createAndSendMessage(allSockets[threadTurn], SERVER_MOVE_REQUEST, NULL, NULL, NULL, threadTurn);
+	//-------------------------write to file send-------------------------------------------
+
 	ReleaseMutex(GameStsteMutex);
 	return 0;
 }
@@ -363,29 +370,26 @@ int HANDLE_CLIENT_PLAYER_MOVE(char* arg)
 	if (LEGAL_MOVE(arg))
 	{
 		game_state.Game_number++;
-		createAndSendMessage(allSockets[0], GAME_VIEW, game_state.players[threadTurn], arg, "CONT");
-		createAndSendMessage(allSockets[1], GAME_VIEW, game_state.players[threadTurn], arg, "CONT");
+		createAndSendMessage(allSockets[0], GAME_VIEW, game_state.players[threadTurn], arg, "CONT", 0);
+		createAndSendMessage(allSockets[1], GAME_VIEW, game_state.players[threadTurn], arg, "CONT", 1);
 		
-		createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
-		createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
+		createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL, 0);
+		createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL, 1);
 		
 		createAndSendMessage(allSockets[(threadTurn + 1) % 2], SERVER_MOVE_REQUEST, NULL, NULL, NULL); // NEW TRY
-	//	createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL); //check delete
-	//	createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[threadTurn], NULL, NULL); //check delete 
-	//	createAndSendMessage(allSockets[threadTurn], SERVER_MOVE_REQUEST, NULL, NULL, NULL); 
-		// --------------- need to release mutex------------------------------------
+				//-------------------------write to file send---------------------------------------------------------------------------
+
 		return 0;;
 	}
-	createAndSendMessage(allSockets[0], GAME_VIEW, game_state.players[threadTurn], arg, "END");
-	createAndSendMessage(allSockets[1], GAME_VIEW, game_state.players[threadTurn], arg, "END");
+	createAndSendMessage(allSockets[0], GAME_VIEW, game_state.players[threadTurn], arg, "END", 0);
+	createAndSendMessage(allSockets[1], GAME_VIEW, game_state.players[threadTurn], arg, "END", 1);
 
-	createAndSendMessage(allSockets[0], GAME_ENDED, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
-	createAndSendMessage(allSockets[1], GAME_ENDED, game_state.players[(threadTurn + 1) % 2], NULL, NULL);
+	createAndSendMessage(allSockets[0], GAME_ENDED, game_state.players[(threadTurn + 1) % 2], NULL, NULL, 0);
+	createAndSendMessage(allSockets[1], GAME_ENDED, game_state.players[(threadTurn + 1) % 2], NULL, NULL, 1);
 
-	//ResetEvent(GameManagerHandle);
-
-	createAndSendMessage(allSockets[0], SERVER_MAIN_MENU, NULL, NULL, NULL);
-	createAndSendMessage(allSockets[1], SERVER_MAIN_MENU, NULL, NULL, NULL);
+	createAndSendMessage(allSockets[0], SERVER_MAIN_MENU, NULL, NULL, NULL, 0);
+	createAndSendMessage(allSockets[1], SERVER_MAIN_MENU, NULL, NULL, NULL, 1);
+	//-------------------------write to file send---------------------------------------------------------------------------------------------
 
 	game_state.game_ended = 1;
 	game_state.game_started = 0;
@@ -402,7 +406,7 @@ int HANDLE_CLIENT_PLAYER_MOVE(char* arg)
 int HANDLE_CLIENT_DISCONNECT(int index, char* arg)
 {
 	//send other player MAIN_MENU
-	createAndSendMessage(allSockets[(index + 1) % 2], SERVER_MAIN_MENU, NULL, NULL, NULL);
+	createAndSendMessage(allSockets[(index + 1) % 2], SERVER_MAIN_MENU, NULL, NULL, NULL, index);
 	game_state.players_num--;
 	ResetEvent(StartGameEvent);
 	socketCount--;
@@ -437,8 +441,11 @@ int PlayGame(SOCKET s, int index)
 					printf("setsockopt failed\n");
 				Rec = RecvDataThread(&received, s);
 				if (Rec == 0)
-					continue;
-				//writeMessageToLogFile(received, RECEIVED);
+				{
+					printError("Error receiving from client", , SOCKET_ERR);
+				}
+				
+				writeMessageToLogFile(received, RECEIVED, index);
 			}
 		}
 		else
@@ -447,8 +454,10 @@ int PlayGame(SOCKET s, int index)
 				printf("setsockopt failed\n");
 			Rec = RecvDataThread(&received,s);
 			if (Rec == 0)
-				continue;
-			//writeMessageToLogFile(received, RECEIVED);
+			{
+				printError("Error receiving from client", &(LogFiles[index]), SOCKET_ERR);
+			}
+			writeMessageToLogFile(received, RECEIVED, index);
 		}
 		if (Rec != TRNS_SUCCEEDED) {
 			continue;
@@ -460,7 +469,7 @@ int PlayGame(SOCKET s, int index)
 		switch (type)
 		{
 		case CLIENT_REQUEST:
-			//---------------add mutex before approaching game_state -------------------------------
+			
 			Handle_CLIENT_REQUEST(s, index, arg);
 			break;
 		case CLIENT_VERSUS:
@@ -469,11 +478,9 @@ int PlayGame(SOCKET s, int index)
 			//relaese
 			break;
 		case CLIENT_PLAYER_MOVE:
-			// --------------- need to add mutex------------------------------------
 			WaitForSingleObject(GameStsteMutex, INFINITE);
 			HANDLE_CLIENT_PLAYER_MOVE(arg);
 			ReleaseMutex(GameStsteMutex);
-			// --------------- need to release mutex------------------------------------
 			break;
 		case CLIENT_DISCONNECT:
 			HANDLE_CLIENT_DISCONNECT(index, arg);
@@ -488,14 +495,7 @@ int PlayGame(SOCKET s, int index)
 	return 0;
 }
 
-/// <summary>
-/// Writing message to Log File
-/// </summary>
-/// <param name="hfile"></param>
-/// <param name="data_to_write"></param>
-/// <param name="bytes_to_write"></param>
-/// <returns></returns>
-int WriteData_David(HANDLE* hfile, char* data_to_write, DWORD bytes_to_write) {    /////// CHANGE THIS NAME 
+int WriteData(HANDLE* hfile, char* data_to_write, DWORD bytes_to_write) {
 	BOOL bErrorFlag;
 	DWORD dwBytesWritten = 0;
 	bErrorFlag = WriteFile(
@@ -519,6 +519,60 @@ int WriteData_David(HANDLE* hfile, char* data_to_write, DWORD bytes_to_write) { 
 		printf("WriteFile error: \n dwBytesWritten != dwBytesToWrite\n");
 		return 1;
 	}
+	return 0;
+}
+
+void printError(const char* error, HANDLE fileHandle, int typeOfError) {
+	char errorMessage[MAX_LOG_MESSAGE];
+	switch (typeOfError) {
+	case SOCKET_ERR:
+		snprintf(errorMessage, MAX_LOG_MESSAGE, error, WSAGetLastError());
+		printf(errorMessage);
+		WriteData(&fileHandle, errorMessage, (DWORD)strlen(errorMessage));
+		break;
+	case WINAPI_ERR:
+		snprintf(errorMessage, MAX_LOG_MESSAGE, error, GetLastError());
+		printf(errorMessage);
+		WriteData(&fileHandle, errorMessage, (DWORD)strlen(errorMessage));
+		break;
+	default:
+		printf(error);
+		WriteData(&fileHandle, error, (DWORD)strlen(error));
+	}
+}
+
+/// <summary>
+/// Writing message to Log File
+/// </summary>
+/// <param name="hfile"></param>
+/// <param name="data_to_write"></param>
+/// <param name="bytes_to_write"></param>
+/// <returns></returns>
+int writeMessageToLogFile(char* buffer, int code, int index) 
+{
+	char* temp = NULL;
+	int sizeOfMessage;
+	if (code == SENT) {
+		sizeOfMessage = snprintf(NULL, 0, "sent to client-%s\n", buffer);
+		if (NULL == (temp = (char*)malloc((sizeOfMessage + 1) * sizeof(char)))) {
+			printError("Error allocating memory for Log message\n", (LogFiles[index]), MISC_ERR);
+			return 1;
+		}
+		snprintf(temp, sizeOfMessage + 1, "sent to client-%s\n", buffer);
+	}
+	else {
+		sizeOfMessage = snprintf(NULL, 0, "received from client-%s\n", buffer);
+		if (NULL == (temp = (char*)malloc((sizeOfMessage + 1) * sizeof(char)))) {
+			printError("Error allocating memory for Log message\n", (LogFiles[index]), MISC_ERR);
+			return 1;
+		}
+		snprintf(temp, sizeOfMessage + 1, "received from client-%s\n", buffer);
+	}
+	if (WriteData(&(LogFiles[index]), temp, sizeOfMessage)) {
+		free(temp);
+		return 1;
+	}
+	free(temp);
 	return 0;
 }
 

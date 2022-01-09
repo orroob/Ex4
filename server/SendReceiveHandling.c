@@ -304,7 +304,7 @@ int SendString(const char* Str, SOCKET sd)
 /// <param name="arg1"> name/move</param>
 /// <param name="client_s">SOCKET</param>
 /// <returns></returns>
-int createAndSendMessage(SOCKET client_s, int messageType, char* arg1, char* arg2, char* arg3)
+int createAndSendMessage(SOCKET client_s, int messageType, char* arg1, char* arg2, char* arg3, int index)
 {
 	char* send;
 	send = PrepareMessage(messageType, arg1, arg2, arg3);
@@ -312,6 +312,7 @@ int createAndSendMessage(SOCKET client_s, int messageType, char* arg1, char* arg
 		printf("Failed to send Server approved");
 		return 1;
 	}
+	writeMessageToLogFile(send, SENT, index);
 	free(send);
 	return 0;
 }

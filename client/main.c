@@ -52,6 +52,7 @@ Or Roob      212199970
 GAME gameStruct;
 SOCKET client_s;
 char clientName[20];
+HANDLE LogFile;
 
 /// <summary>
 /// WSAcleanup, closing socket and freeing 
@@ -68,6 +69,7 @@ int cleanupAll(char* recieved) {
 	free(recieved);
 	return 0;
 }
+
 /// <summary>
 /// get message and return the message type defined as ints
 /// </summary>
@@ -125,6 +127,7 @@ int getArgsFromMessage(char* message, char **arg1, char** arg2, char** arg3)
 	}
 	return -1;
 }
+
 /// <summary>
 /// Get the message and tranfer it to int 
 /// </summary>
@@ -152,6 +155,7 @@ int transMessageToInt(char* message, char** arg1, char** arg2, char** arg3)
 	//with arguments:
 	return getArgsFromMessage(message, arg1, arg2, arg3);
 }
+
 /// <summary>
 /// read the input from the Outside world, can be unkown size of int so need to use realloc as needed
 /// </summary>
@@ -178,27 +182,37 @@ char* readinput() {    /// NEED TO FREE INPUT
 		*temp = '\0';
 	return input;
 }
+
 /// <summary>
 /// if both clients connected to the server you can start the game!
 /// </summary>
 /// <returns></returns>
 int PlayGame()
 {
-	char* received = NULL, * buffer = NULL;
-	char *input;
-	
+	char* received = NULL, * buffer = NULL, *input;
 	int Rec, type;
 	DWORD timeout = 1500000;
 	char* name, * otherPlayerMove, * gameStatus;
-	name = malloc(20 * sizeof(char));
-	otherPlayerMove = malloc(20 * sizeof(char));
-	gameStatus = malloc(20 * sizeof(char));
+	if ((name = malloc(20 * sizeof(char))) == NULL)
+		return 1;
+	if ((otherPlayerMove = malloc(20 * sizeof(char))) == NULL)
+	{
+		free(name);
+		return 1;
+	}
+	if ((gameStatus = malloc(20 * sizeof(char))) == NULL)
+	{
+		free(name);
+		free(otherPlayerMove);
+		return 1;
+	}
 	while (!gameStruct.gameEnded)
 	{
 			//TRUN_SWITCH
 		if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
 			printf("setsockopt failed\n");
 		Rec = RecvDataThread(&received, client_s);    
+		//-------------------------write to file rec-------------------------------------------------
 		if (Rec == TRNS_SUCCEEDED)
 		{
 			type = transMessageToInt(received, &name, &otherPlayerMove, &gameStatus);
@@ -214,6 +228,7 @@ int PlayGame()
 					if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
 						printf("setsockopt failed\n");
 					Rec = RecvDataThread(&received, client_s);
+					//-------------------------write to file rec-------------------------------------------
 					if (Rec == TRNS_SUCCEEDED)
 					{
 						type = transMessageToInt(received, NULL, NULL , NULL);       
@@ -230,6 +245,7 @@ int PlayGame()
 								free(input);
 								return 1;
 							}
+						//-------------------------write to file send-------------------------------------------
 						}
 					}
 				}
@@ -238,7 +254,7 @@ int PlayGame()
 				}
 				break;
 			case GAME_VIEW:
-				printf("%s move was %s %s\n", name, otherPlayerMove, gameStatus); //check if both '\n\' are needed ------------------------
+				printf("%s move was %s %s\n", name, otherPlayerMove, gameStatus); 
 				break;
 			case GAME_ENDED:
 				printf("%s won!\n", name);
@@ -263,6 +279,81 @@ int PlayGame()
 /// <param name="argc"></param>
 /// <param name="argv">arguments received from cmd</param>
 /// <returns>returns 0 if all is good, 1 otherwise </returns>
+
+int init_game()
+{
+	int Rec, type;
+	DWORD timeout = 15000;
+	char* recieved=NULL, * input=NULL;
+get_main_menu:      	               
+	if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0) {
+		printf("setsockopt failed\n");
+	}
+	Rec = RecvDataThread(&recieved, client_s);
+	//-------------------------write to file rec-------------------------------------------
+
+	if (Rec == TRNS_SUCCEEDED)
+	{
+		if (transMessageToInt(recieved, NULL, NULL, NULL) == SERVER_MAIN_MENU)
+		{
+			printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
+			input = readinput();
+			while (strcmp(input, "2") && strcmp(input, "1"))
+			{
+				printf("Error: Illegal command\nChoose what to do next:\n1. Play against another client\n2. Quit\n");
+				input = readinput();
+			}
+			if (!strcmp(input, "1"))//CLIENT_VERSUS
+			{
+				if (createAndSendMessage(CLIENT_VERSUS, NULL, client_s)) 
+				{
+					return 1; // END 
+				}
+				//-------------------------write to file send-------------------------------------------
+			}
+			if (!strcmp(input, "2")) //DISCONNECT_CLIENT 
+				if (createAndSendMessage(CLIENT_DISCONNECT, NULL, client_s)) 
+				{
+					return 1; // END 
+				}
+			//-------------------------write to file send-------------------------------------------
+
+		}
+	}
+	free(recieved); 	// CLIENT_VERSUS was chosen
+	recieved = NULL;
+	DWORD timeout2 = 30000; //Wait for 30 seconds for a chance to get an opponent
+	if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout2, sizeof timeout2) < 0)
+		printf("setsockopt failed\n");
+	Rec = RecvDataThread(&recieved, client_s);
+	//-------------------------write to file rec-------------------------------------------
+
+	if (Rec == TRNS_SUCCEEDED)
+	{
+		if ((type = transMessageToInt(recieved, NULL, NULL, NULL)) == GAME_STARTED)
+		{
+			free(recieved);
+			recieved = NULL;
+			printf("Game is on!\n");
+			PlayGame();
+		}
+		if (type == SERVER_NO_OPPONENTS)
+		{
+			free(recieved);
+			recieved = NULL;
+			goto get_main_menu;
+		}
+		if (type == SERVER_OPPONENT_QUIT)
+		{
+			printf("Opponent Quit.\n");
+			free(recieved);
+			recieved = NULL;
+			goto get_main_menu;
+		}
+	}
+	goto get_main_menu;
+}
+
 int main(int argc, char* argv[])
 {
 	gameStruct.clientName = argv[3];
@@ -306,12 +397,15 @@ int main(int argc, char* argv[])
 		if (createAndSendMessage(CLIENT_REQUEST, argv[3], client_s)) {
 			return 1; // END 
 		 }
+		//-------------------------write to file send-------------------------------------------
 		free(recieved);
 		recieved = NULL; 
 		if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0) {
 			printf("setsockopt failed\n");
 		}
 		Rec = RecvDataThread(&recieved, client_s);
+		//-------------------------write to file rec-------------------------------------------
+
 		if (Rec == TRNS_SUCCEEDED)
 		{
 			if (!strcmp(recieved, "SERVER_DENIED\n"))
@@ -341,64 +435,8 @@ int main(int argc, char* argv[])
 	}
 	free(recieved);
 	recieved = NULL;
-get_main_menu:      	//we are now connected to the server RECV MAIN MENU                   
-	if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0) {
-		printf("setsockopt failed\n");
-	}
-	Rec = RecvDataThread(&recieved, client_s);
-	if (Rec == TRNS_SUCCEEDED)
-	{
-		if (transMessageToInt(recieved, NULL, NULL, NULL) == SERVER_MAIN_MENU)
-		{
-			printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
-			input = readinput();
-			while (strcmp(input, "2") && strcmp(input, "1"))
-			{
-				printf("Error: Illegal command\nChoose what to do next:\n1. Play against another client\n2. Quit\n");
-				input = readinput();
-			}
-			if (!strcmp(input, "1"))//CLIENT_VERSUS
-			{
-				Sleep(3000);
-				if (createAndSendMessage(CLIENT_VERSUS, NULL, client_s)) {
-					return 1; // END 
-				}
-			}
-			if (!strcmp(input, "2")) //DISCONNECT_CLIENT 
-				if (createAndSendMessage(CLIENT_DISCONNECT, NULL, client_s)) {
-					return 1; // END 
-			}
-		}
-	}
-	free(recieved); 	// CLIENT_VERSUS was chosen
-	recieved = NULL;
-	DWORD timeout2 = 30000; //Wait for 30 seconds for a chance to get an opponent
-	if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout2, sizeof timeout2) < 0)
-		printf("setsockopt failed\n");
-	Rec = RecvDataThread(&recieved, client_s);
-	if (Rec == TRNS_SUCCEEDED)
-	{
-		if ((type=transMessageToInt(recieved, NULL, NULL, NULL)) == GAME_STARTED)   
-		{
-			free(recieved);
-			recieved = NULL;
-			printf("Game is on!\n");
-			PlayGame();
-		}
-		if (type == SERVER_NO_OPPONENTS)
-		{
-			free(recieved);
-			recieved = NULL;
-			goto get_main_menu;
-		}
-		if (type == SERVER_OPPONENT_QUIT)       
-		{
-			printf("Opponent Quit.\n");
-			free(recieved);
-			recieved = NULL;
-			goto get_main_menu;
-		}
-	}
-	goto get_main_menu;	
+	//we are now connected to the server RECV MAIN MENU    
+	init_game();
+
 	cleanupAll(recieved);
 }
