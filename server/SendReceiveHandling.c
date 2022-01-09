@@ -1,6 +1,12 @@
 #include "HardCodedData.h"
 #include "SendReceiveHandling.h"
-
+/// <summary>
+/// receive a chunk of the buffer
+/// </summary>
+/// <param name="OutputBuffer"></param>
+/// <param name="BytesToReceive"></param>
+/// <param name="sd"></param>
+/// <returns></returns>
 int ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 {
 	char* CurPlacePtr = OutputBuffer;
@@ -104,7 +110,12 @@ int RecvDataThread(char** AcceptedStr, SOCKET client_s)
 	}
 	return TRNS_SUCCEEDED;
 }
-
+/// <summary>
+/// Get message type and arranfe a buffer that contains the message needed to be sent
+/// </summary>
+/// <param name="messageType"> int from defined message types </param>
+/// <param name="arg1"> name of client or his move </param>
+/// <returns></returns>
 char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3) // need to reduce lines------------------
 {
 	char* buffer;
@@ -217,7 +228,13 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3) // nee
 	}
 	return buffer;
 }
-
+/// <summary>
+/// func that sends a chunk of the buffer
+/// </summary>
+/// <param name="Buffer"></param>
+/// <param name="BytesToSend"></param>
+/// <param name="sd"></param>
+/// <returns></returns>
 int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
 {
 	const char* CurPlacePtr = Buffer;
@@ -244,7 +261,12 @@ int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
 
 	return TRNS_SUCCEEDED;
 }
-
+/// <summary>
+/// func that calls another func that will send smaller chunks of the buffer
+/// </summary>
+/// <param name="Str"></param>
+/// <param name="sd"></param>
+/// <returns></returns>
 int SendString(const char* Str, SOCKET sd)
 {
 	//Sleep(5000);
@@ -275,7 +297,13 @@ int SendString(const char* Str, SOCKET sd)
 
 	return SendRes;
 }
-
+/// <summary>
+/// put in buffer the message and use a func that will senf it to the server
+/// </summary>
+/// <param name="messageType"> int from defined messages</param>
+/// <param name="arg1"> name/move</param>
+/// <param name="client_s">SOCKET</param>
+/// <returns></returns>
 int createAndSendMessage(SOCKET client_s, int messageType, char* arg1, char* arg2, char* arg3)
 {
 	char* send;

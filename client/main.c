@@ -1,19 +1,22 @@
+/*
 #define _CRT_SECURE_NO_WARNINGS
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-#include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#include <stdio.h>
-#include <stdlib.h> 
-#include <string.h> 
 #pragma comment(lib, "Ws2_32.lib")
+*/
 #include "HardCodedData.h"
 #include "SendReceiveHandling.h"
-
+/*
+EX4
+Philip Dolav 322656273
+Or Roob      212199970
+*/
+/*
 //server messages
 #define SERVER_APPROVED 0
 #define SERVER_DENIED 1
@@ -44,12 +47,17 @@
 #define CHUNK 200
 #define READ 0
 #define WRITE 1
-
+*/
 //globals
 GAME gameStruct;
 SOCKET client_s;
 char clientName[20];
 
+/// <summary>
+/// WSAcleanup, closing socket and freeing 
+/// </summary>
+/// <param name="recieved"></param>
+/// <returns></returns>
 int cleanupAll(char* recieved) {
 	int result = WSACleanup();
 	if (result != 0) {
@@ -60,13 +68,20 @@ int cleanupAll(char* recieved) {
 	free(recieved);
 	return 0;
 }
-
+/// <summary>
+/// get message and return the message type defined as ints
+/// </summary>
+/// <param name="message">message client recvs</param>
+/// <param name="arg1">arguments from server</param>
+/// <param name="arg2"></param>
+/// <param name="arg3"></param>
+/// <returns> returns int that resembles the message type</returns>
 int getArgsFromMessage(char* message, char **arg1, char** arg2, char** arg3)
 {
 	char mType[20] = { 0 };
 	int i = 0;
 	char* temp = message, * temp1;
-	while (temp != NULL && *temp != ':')          /////////DOESNT WORK FOR MOVE_REQUEST INFINITE LOOP
+	while (temp != NULL && *temp != ':')       
 	{
 		mType[i] = *temp;
 		temp++;
@@ -74,9 +89,8 @@ int getArgsFromMessage(char* message, char **arg1, char** arg2, char** arg3)
 	}
 	if (temp == NULL)
 		return -1;
-	mType[i] = '\0';   ///FAILS
+	mType[i] = '\0';   
 	*temp = '\0';
-	//strcpy(mType, message);
 
 	if (!strcmp(mType, "GAME_ENDED"))
 	{
@@ -111,7 +125,14 @@ int getArgsFromMessage(char* message, char **arg1, char** arg2, char** arg3)
 	}
 	return -1;
 }
-
+/// <summary>
+/// Get the message and tranfer it to int 
+/// </summary>
+/// <param name="message"></param>
+/// <param name="arg1"></param>
+/// <param name="arg2"></param>
+/// <param name="arg3"></param>
+/// <returns></returns>
 int transMessageToInt(char* message, char** arg1, char** arg2, char** arg3)
 {
 	if (!strcmp(message, "SERVER_APPROVED\n"))
@@ -131,7 +152,10 @@ int transMessageToInt(char* message, char** arg1, char** arg2, char** arg3)
 	//with arguments:
 	return getArgsFromMessage(message, arg1, arg2, arg3);
 }
-
+/// <summary>
+/// read the input from the Outside world, can be unkown size of int so need to use realloc as needed
+/// </summary>
+/// <returns></returns>
 char* readinput() {    /// NEED TO FREE INPUT
 
 	char* input = NULL;
@@ -154,7 +178,10 @@ char* readinput() {    /// NEED TO FREE INPUT
 		*temp = '\0';
 	return input;
 }
-
+/// <summary>
+/// if both clients connected to the server you can start the game!
+/// </summary>
+/// <returns></returns>
 int PlayGame()
 {
 	char* received = NULL, * buffer = NULL;
@@ -171,7 +198,7 @@ int PlayGame()
 			//TRUN_SWITCH
 		if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
 			printf("setsockopt failed\n");
-		Rec = RecvDataThread(&received, client_s);     ///////////STUCK ON RECV FOR  palyer number 2
+		Rec = RecvDataThread(&received, client_s);    
 		if (Rec == TRNS_SUCCEEDED)
 		{
 			type = transMessageToInt(received, &name, &otherPlayerMove, &gameStatus);
@@ -193,8 +220,7 @@ int PlayGame()
 						if (type == SERVER_MOVE_REQUEST)
 						{
 							printf("Enter the next number or boom:\n");
-							input =readinput();
-							//gets(input);   
+							input =readinput();  
 							if (setsockopt(client_s, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof timeout) < 0)
 								printf("setsockopt failed\n");
 							if (createAndSendMessage(CLIENT_PLAYER_MOVE, input, client_s)) {
@@ -204,19 +230,6 @@ int PlayGame()
 								free(input);
 								return 1;
 							}
-
-							//buffer = PrepareMessage(CLIENT_PLAYER_MOVE, input);
-							//Sleep(500);
-							//if (SendString(buffer, client_s) != TRNS_SUCCEEDED)
-							//{
-							//	printf("send failed with error code : %d", WSAGetLastError());
-							//	//closesocket(client_s);
-							//	free(name);
-							//	free(otherPlayerMove);
-							//	free(gameStatus);
-							//	free(buffer);
-							//	return 1;
-							//}
 						}
 					}
 				}
@@ -241,14 +254,19 @@ int PlayGame()
 	free(name);
 	free(otherPlayerMove);
 	free(gameStatus);
+//free input?
 	return 0;
 }
-
+/// <summary>
+/// Startup WINSOCK, connect client to a server, calls our main func playgame.
+/// </summary>
+/// <param name="argc"></param>
+/// <param name="argv">arguments received from cmd</param>
+/// <returns>returns 0 if all is good, 1 otherwise </returns>
 int main(int argc, char* argv[])
 {
 	gameStruct.clientName = argv[3];
-	// Initialize Winsock
-	WSADATA wsa_data;
+	WSADATA wsa_data; 	// Initialize Winsock
 	int result;
 	result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
 	if (result != 0) {
@@ -268,7 +286,7 @@ int main(int argc, char* argv[])
 	char* recieved = NULL, *input = NULL;
 	//Call the connect function, passing the created socket and the sockaddr_in structure as parameters. Check for general errors.
 	//loop
-	DWORD timeout = 15000000;
+	DWORD timeout = 15000;
 	while (1) {		//try to connect to server
 		if (connect(client_s, (SOCKADDR*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR)
 		{
@@ -279,11 +297,9 @@ int main(int argc, char* argv[])
 				continue;
 			if (!strcmp(input, "2"))
 				return cleanupAll(recieved);  //exit code
-			else
-			{
+			else{
 				printf("Error: illegal command\n");
-				goto get_input;
-			}
+				goto get_input;}
 		}
 		printf("Connected to server on %s:%s.\n", argv[1], argv[2]);
 		//CLIENT_REQUEST
@@ -293,9 +309,6 @@ int main(int argc, char* argv[])
 		free(recieved);
 		recieved = NULL; 
 		if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0) {
-		
-			/// ///Do something? should you disconnect? or try again?
-			
 			printf("setsockopt failed\n");
 		}
 		Rec = RecvDataThread(&recieved, client_s);
@@ -305,8 +318,7 @@ int main(int argc, char* argv[])
 			{
 			get_input2:
 				printf("Server on %s:%s denied the connection request.\nChoose what to do next:\n1. Try to reconnect\n2. Exit\n", argv[1], argv[2]);
-				// if input is 1, Try to connect again
-				if (!strcmp(input, "1")) {
+				if (!strcmp(input, "1")) { // if input is 1, Try to connect again
 					continue;
 				}
 				if (!strcmp(input, "2")) {
@@ -324,22 +336,13 @@ int main(int argc, char* argv[])
 					goto get_input2;
 				}
 			}
-			//Seems we can skip this
-		//else if (!strcmp(recieved, "SERVER_APPROVED\n"))
-		//{
-		//	//Take in considiration Quiting
-		//}
 			break;
 		}
 	}
 	free(recieved);
 	recieved = NULL;
-	//we are now connected to the server RECV MAIN MENU
-get_main_menu:                        
+get_main_menu:      	//we are now connected to the server RECV MAIN MENU                   
 	if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0) {
-
-		// Do Something
-
 		printf("setsockopt failed\n");
 	}
 	Rec = RecvDataThread(&recieved, client_s);
@@ -367,8 +370,7 @@ get_main_menu:
 			}
 		}
 	}
-	// CLIENT_VERSUS was chosen
-	free(recieved);
+	free(recieved); 	// CLIENT_VERSUS was chosen
 	recieved = NULL;
 	DWORD timeout2 = 30000; //Wait for 30 seconds for a chance to get an opponent
 	if (setsockopt(client_s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout2, sizeof timeout2) < 0)
@@ -389,7 +391,7 @@ get_main_menu:
 			recieved = NULL;
 			goto get_main_menu;
 		}
-		if (type == SERVER_OPPONENT_QUIT)          /////////////NEW
+		if (type == SERVER_OPPONENT_QUIT)       
 		{
 			printf("Opponent Quit.\n");
 			free(recieved);

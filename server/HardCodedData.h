@@ -1,7 +1,15 @@
 #pragma once
 //This Header file contains all of includes which are being used in main.c
+
 #define _CRT_SECURE_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRTDBG_MAP_ALLOC
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "Ws2_32.lib")
 #include <math.h>
 #include <crtdbg.h>
 #include <string.h>

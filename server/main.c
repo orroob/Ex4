@@ -1,24 +1,14 @@
-#define _CRT_SECURE_NO_WARNINGS
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
-
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#pragma comment(lib, "Ws2_32.lib")
-#include <stdio.h>
-#include <stdlib.h> 
-#include <string.h>
-
 #include "ProcessHandling.h"
 #include "HardCodedData.h"
 #include"SendReceiveHandling.h"
 
 #define SENT 0
 #define RECEIVED 1
-
+/*
+EX4
+Philip Dolav 322656273
+Or Roob      212199970
+*/
 //globals
 Game game_state = { 0 };
 SOCKET allSockets[MAX_SOCKETS];
@@ -28,7 +18,10 @@ HANDLE GameStsteMutex;
 HANDLE Threads[MAX_SOCKETS];
 HANDLE LogFile;
 int openedsuccessfuly[MAX_SOCKETS], socketCount = 0;
-
+/// <summary>
+/// WSAcleanup, closing socket and freeing 
+/// </summary>
+/// <returns> 1 f failed, 0 otherwise </returns>
 int CleanUpAll()
 {
 	int ToReturn = 0;
@@ -360,9 +353,9 @@ int Handle_CLIENT_VERSUS(SOCKET client_s, int index)
 /// <summary>
 /// This function manages the comunication with the client when receiving CLIENT_PLAYER_MOVE.
 /// </summary>
-/// <param name="client_s"></param>
-/// <param name="index"></param>
-/// <param name="arg"></param>
+/// <param name="client_s"> SOCKET </param>
+/// <param name="index"> thread number</param>
+/// <param name="arg"> player move </param>
 /// <returns></returns>
 int HANDLE_CLIENT_PLAYER_MOVE(char* arg)
 {
@@ -402,9 +395,9 @@ int HANDLE_CLIENT_PLAYER_MOVE(char* arg)
 /// <summary>
 /// This function manages the comunication with the client when receiving CLIENT_DISCONNECT.
 /// </summary>
-/// <param name="client_s"></param>
-/// <param name="index"></param>
-/// <param name="arg"></param>
+/// <param name="client_s"> SOCKET </param>
+/// <param name="index"> Thread Number</param>
+/// <param name="arg"> input </param>
 /// <returns></returns>
 int HANDLE_CLIENT_DISCONNECT(int index, char* arg)
 {
@@ -420,8 +413,8 @@ int HANDLE_CLIENT_DISCONNECT(int index, char* arg)
 /// <summary>
 /// This function manages the game in front of the clients.
 /// </summary>
-/// <param name="s"></param>
-/// <param name="index"></param>
+/// <param name="s"> SOCKET </param>
+/// <param name="index"> input </param>
 /// <returns></returns>
 int PlayGame(SOCKET s, int index)
 {
@@ -495,8 +488,14 @@ int PlayGame(SOCKET s, int index)
 	return 0;
 }
 
-
-int WriteData_David(HANDLE* hfile, char* data_to_write, DWORD bytes_to_write) {
+/// <summary>
+/// Writing message to Log File
+/// </summary>
+/// <param name="hfile"></param>
+/// <param name="data_to_write"></param>
+/// <param name="bytes_to_write"></param>
+/// <returns></returns>
+int WriteData_David(HANDLE* hfile, char* data_to_write, DWORD bytes_to_write) {    /////// CHANGE THIS NAME 
 	BOOL bErrorFlag;
 	DWORD dwBytesWritten = 0;
 	bErrorFlag = WriteFile(

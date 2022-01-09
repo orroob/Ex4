@@ -1,6 +1,11 @@
 #include "HardCodedData.h"
 #include "SendReceiveHandling.h"
-
+/// <summary>
+/// Get message type and arranfe a buffer that contains the message needed to be sent
+/// </summary>
+/// <param name="messageType"> int from defined message types </param>
+/// <param name="arg1"> name of client or his move </param>
+/// <returns></returns>
 char* PrepareMessage(int messageType, char* arg1)
 {
 
@@ -17,7 +22,6 @@ char* PrepareMessage(int messageType, char* arg1)
 		{
 			return NULL;
 		}
-		//printf("prepare m started\n");
 		sprintf_s(buffer, buffSize + 1, "CLIENT_REQUEST:%s\n", arg1);
 		break;
 
@@ -62,7 +66,13 @@ char* PrepareMessage(int messageType, char* arg1)
 	}
 	return buffer;
 }
-
+/// <summary>
+/// put in buffer the message and use a func that will senf it to the server
+/// </summary>
+/// <param name="messageType"> int from defined messages</param>
+/// <param name="arg1"> name/move</param>
+/// <param name="client_s">SOCKET</param>
+/// <returns></returns>
 int createAndSendMessage(int messageType, char* arg1, SOCKET client_s) {
 	char* buffer;
 	buffer = PrepareMessage(messageType, arg1);
@@ -78,10 +88,16 @@ int createAndSendMessage(int messageType, char* arg1, SOCKET client_s) {
 		//}
 		return 1;
 	}
-	free(buffer); //do we really need to free this????
+	free(buffer);
 	return 0;
 }
-
+/// <summary>
+/// func that sends a chunk of the buffer
+/// </summary>
+/// <param name="Buffer"></param>
+/// <param name="BytesToSend"></param>
+/// <param name="sd"></param>
+/// <returns></returns>
 int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
 {
 	const char* CurPlacePtr = Buffer;
@@ -112,10 +128,14 @@ int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
 
 	return TRNS_SUCCEEDED;
 }
-
+/// <summary>
+/// func that calls another func that will send smaller chunks of the buffer
+/// </summary>
+/// <param name="Str"></param>
+/// <param name="sd"></param>
+/// <returns></returns>
 int SendString(const char* Str, SOCKET sd)
 {
-	//Sleep(5000); ////////////   NEW CHECK
 	/* Send the the request to the server on socket sd */
 	int TotalStringSizeInBytes;
 	int SendRes;
@@ -139,7 +159,13 @@ int SendString(const char* Str, SOCKET sd)
 
 	return SendRes;
 }
-
+/// <summary>
+/// receive a chunk of the buffer
+/// </summary>
+/// <param name="OutputBuffer"></param>
+/// <param name="BytesToReceive"></param>
+/// <param name="sd"></param>
+/// <returns></returns>
 int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 {
 	char* CurPlacePtr = OutputBuffer;
@@ -168,7 +194,12 @@ int  ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd)
 
 	return TRNS_SUCCEEDED;
 }
-
+/// <summary>
+/// receive the buffer from the server while calling another func to receive smaller chunks of strings.
+/// </summary>
+/// <param name="OutputStrPtr"></param>
+/// <param name="sd"></param>
+/// <returns></returns>
 int ReceiveString(char** OutputStrPtr, SOCKET sd)
 {
 	/* Recv the the request to the server on socket sd */
@@ -216,7 +247,12 @@ int ReceiveString(char** OutputStrPtr, SOCKET sd)
 
 	return RecvRes;
 }
-
+/// <summary>
+/// Calls the func which receives the string and return if succeded or failed
+/// </summary>
+/// <param name="AcceptedStr"></param>
+/// <param name="client_s"></param>
+/// <returns></returns>
 int RecvDataThread(char** AcceptedStr, SOCKET client_s)
 {
 	int RecvRes;
@@ -241,17 +277,6 @@ int RecvDataThread(char** AcceptedStr, SOCKET client_s)
 		//return 0x555;
 	}
 	return TRNS_SUCCEEDED;
-	//else if (!strcmp (AcceptedStr,"SERVER_DENIED")) {
-	//	printf("Server on %s:%s denied the connection request.\nChoose what to do next:\n1. Try to reconnect\n2. Exit\n", arg1, arg2);
-	//	return TRNS_SUCCEEDED;
-	//	//return 0x555;
-	//}
-	//else if (!strcmp(AcceptedStr,"SERVER_APPROVED"))
-	//{
-	//	printf("Choose what to do next:\n1. Play against another client\n2. Quit\n");
-	//	return TRNS_SUCCEEDED;
-	//}
-
 	//free(AcceptedStr);
 	//return 0;
 }
