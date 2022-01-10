@@ -14,6 +14,7 @@ SOCKET allSockets[MAX_SOCKETS];
 HANDLE StartGameEvent;
 HANDLE RestartGameEvent;
 HANDLE GameStsteMutex;
+HANDLE LogFileMutext;
 HANDLE Threads[MAX_SOCKETS];
 HANDLE LogFiles[MAX_SOCKETS];
 int openedsuccessfuly[MAX_SOCKETS], socketCount = 0;
@@ -247,6 +248,16 @@ int decideTurn()
 /// <returns></returns>
 int Handle_CLIENT_REQUEST(SOCKET client_s, int index, char *arg)
 {
+	//create log file
+	char* LogFileName;
+	if ((LogFileName = malloc((MAX_LOG_MESSAGE + 1) * sizeof(char))) == NULL)
+		return 1;
+	snprintf(LogFileName, MAX_LOG_MESSAGE + 1, "Thread_log_%s.txt", arg);
+	if (openFile(&(LogFiles[index]), LogFileName, WRITE)) {
+		return 1;
+	}
+	free(LogFileName);
+
 	if (game_state.players_num >= 2)
 	{
 		//server denied
@@ -266,14 +277,7 @@ int Handle_CLIENT_REQUEST(SOCKET client_s, int index, char *arg)
 	strcpy(game_state.players[index], arg);
 	ReleaseMutex(GameStsteMutex);
 
-	//create log file
-	char* LogFileName;
-	if((LogFileName = malloc((MAX_LOG_MESSAGE + 1)*sizeof(char))) == NULL)
-		return 1;
-	snprintf(LogFileName, MAX_LOG_MESSAGE + 1, "Thread_log_%s.txt", arg);
-	if (openFile(&(LogFiles[index]), LogFileName, WRITE)) {
-		return 1;
-	}
+	
 
 	//send MAIN MENU
 	createAndSendMessage(client_s, SERVER_MAIN_MENU, NULL, NULL, NULL, index);
@@ -376,7 +380,7 @@ int HANDLE_CLIENT_PLAYER_MOVE(char* arg)
 		createAndSendMessage(allSockets[0], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL, 0);
 		createAndSendMessage(allSockets[1], TURN_SWITCH, game_state.players[(threadTurn + 1) % 2], NULL, NULL, 1);
 		
-		createAndSendMessage(allSockets[(threadTurn + 1) % 2], SERVER_MOVE_REQUEST, NULL, NULL, NULL); // NEW TRY
+		createAndSendMessage(allSockets[(threadTurn + 1) % 2], SERVER_MOVE_REQUEST, NULL, NULL, NULL, (threadTurn + 1) % 2); // NEW TRY
 				//-------------------------write to file send---------------------------------------------------------------------------
 
 		return 0;;
@@ -406,7 +410,9 @@ int HANDLE_CLIENT_PLAYER_MOVE(char* arg)
 int HANDLE_CLIENT_DISCONNECT(int index, char* arg)
 {
 	//send other player MAIN_MENU
-	createAndSendMessage(allSockets[(index + 1) % 2], SERVER_MAIN_MENU, NULL, NULL, NULL, index);
+	createAndSendMessage(allSockets[(index + 1) % 2], SERVER_OPPONENT_QUIT, NULL, NULL, NULL, (index + 1) % 2);
+
+	createAndSendMessage(allSockets[(index + 1) % 2], SERVER_MAIN_MENU, NULL, NULL, NULL, (index + 1) % 2);
 	game_state.players_num--;
 	ResetEvent(StartGameEvent);
 	socketCount--;
@@ -426,7 +432,7 @@ int PlayGame(SOCKET s, int index)
 	int Rec, type, threadTurn = 0, canStartGame, isFirstPlayer = 0;
 	if ((arg = malloc(20 * sizeof(char))) == NULL)
 		return 1;
-	DWORD timeout = 150000;
+	DWORD timeout = 15000;
 
 	while (!game_state.game_ended)
 	{
@@ -440,11 +446,15 @@ int PlayGame(SOCKET s, int index)
 				if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
 					printf("setsockopt failed\n");
 				Rec = RecvDataThread(&received, s);
-				if (Rec == 0)
+				if (Rec != TRNS_SUCCEEDED)
 				{
 					PrintErrorToFile("Error receiving from client", &(LogFiles[index]), SOCKET_ERR);
+					free(received);
+					free(arg);
+					return 1;
 				}
-				writeMessageToLogFile(received, RECEIVED, index);
+				if (received != NULL)
+					writeMessageToLogFile(received, RECEIVED, index);
 			}
 		}
 		else
@@ -452,9 +462,12 @@ int PlayGame(SOCKET s, int index)
 			if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof timeout) < 0)
 				printf("setsockopt failed\n");
 			Rec = RecvDataThread(&received,s);
-			if (Rec == 0)
+			if (Rec != TRNS_SUCCEEDED)
 			{
 				PrintErrorToFile("Error receiving from client", &(LogFiles[index]), SOCKET_ERR);
+				free(received);
+				free(arg);
+				return 1;
 			}
 			writeMessageToLogFile(received, RECEIVED, index);
 		}

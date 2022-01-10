@@ -88,6 +88,7 @@ int createAndSendMessage(int messageType, char* arg1, SOCKET client_s) {
 		//}
 		return 1;
 	}
+	writeMessageToLogFile(buffer, SENT);
 	free(buffer);
 	return 0;
 }

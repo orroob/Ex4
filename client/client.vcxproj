@@ -141,10 +141,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="FileHandling.c" />
     <ClCompile Include="main.c" />
     <ClCompile Include="SendReceiveHandling.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="FileHandling.h" />
     <ClInclude Include="HardCodedData.h" />
     <ClInclude Include="SendReceiveHandling.h" />
   </ItemGroup>

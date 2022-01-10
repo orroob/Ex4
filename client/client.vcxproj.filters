@@ -27,12 +27,18 @@
     <ClCompile Include="SendReceiveHandling.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="FileHandling.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="HardCodedData.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="SendReceiveHandling.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FileHandling.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

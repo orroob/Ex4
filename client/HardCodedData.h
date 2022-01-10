@@ -50,6 +50,12 @@
 #define CHUNK 200
 #define READ 0
 #define WRITE 1
+#define MAX_LOG_MESSAGE 50
+#define SOCKET_ERR 0
+#define WINAPI_ERR 1
+#define MISC_ERR 2
+#define SENT 0
+#define RECEIVED 1
 
 //structures
 typedef struct Game_STATUS
