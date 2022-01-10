@@ -1,7 +1,7 @@
 #include "ProcessHandling.h"
 #include "HardCodedData.h"
 #include"SendReceiveHandling.h"
-
+#pragma warning(disable: C6308)
 /*
 EX4
 Philip Dolav 322656273
@@ -442,7 +442,7 @@ int PlayGame(SOCKET s, int index)
 				Rec = RecvDataThread(&received, s);
 				if (Rec == 0)
 				{
-					printError("Error receiving from client", &(LogFiles[index]), SOCKET_ERR);
+					PrintErrorToFile("Error receiving from client", &(LogFiles[index]), SOCKET_ERR);
 				}
 				writeMessageToLogFile(received, RECEIVED, index);
 			}
@@ -454,7 +454,7 @@ int PlayGame(SOCKET s, int index)
 			Rec = RecvDataThread(&received,s);
 			if (Rec == 0)
 			{
-				printError("Error receiving from client", &(LogFiles[index]), SOCKET_ERR);
+				PrintErrorToFile("Error receiving from client", &(LogFiles[index]), SOCKET_ERR);
 			}
 			writeMessageToLogFile(received, RECEIVED, index);
 		}
@@ -468,7 +468,6 @@ int PlayGame(SOCKET s, int index)
 		switch (type)
 		{
 		case CLIENT_REQUEST:
-			
 			Handle_CLIENT_REQUEST(s, index, arg);
 			break;
 		case CLIENT_VERSUS:
@@ -521,7 +520,7 @@ int WriteData(HANDLE* hfile, char* data_to_write, DWORD bytes_to_write) {
 	return 0;
 }
 
-void printError(const char* error, HANDLE fileHandle, int typeOfError) {
+int PrintErrorToFile(const char* error, HANDLE fileHandle, int typeOfError) {
 	char errorMessage[MAX_LOG_MESSAGE];
 	switch (typeOfError) {
 	case SOCKET_ERR:
@@ -538,6 +537,7 @@ void printError(const char* error, HANDLE fileHandle, int typeOfError) {
 		printf(error);
 		WriteData(&fileHandle, error, (DWORD)strlen(error));
 	}
+	return 0;
 }
 
 /// <summary>
@@ -554,7 +554,7 @@ int writeMessageToLogFile(char* buffer, int code, int index)
 	if (code == SENT) {
 		sizeOfMessage = snprintf(NULL, 0, "sent to client-%s\n", buffer);
 		if (NULL == (temp = (char*)malloc((sizeOfMessage + 1) * sizeof(char)))) {
-			printError("Error allocating memory for Log message\n", (LogFiles[index]), MISC_ERR);
+			PrintErrorToFile("Error allocating memory for Log message\n", &(LogFiles[index]), MISC_ERR);
 			return 1;
 		}
 		snprintf(temp, sizeOfMessage + 1, "sent to client-%s\n", buffer);
@@ -562,7 +562,7 @@ int writeMessageToLogFile(char* buffer, int code, int index)
 	else {
 		sizeOfMessage = snprintf(NULL, 0, "received from client-%s\n", buffer);
 		if (NULL == (temp = (char*)malloc((sizeOfMessage + 1) * sizeof(char)))) {
-			printError("Error allocating memory for Log message\n", (LogFiles[index]), MISC_ERR);
+			PrintErrorToFile("Error allocating memory for Log message\n", &(LogFiles[index]), MISC_ERR);
 			return 1;
 		}
 		snprintf(temp, sizeOfMessage + 1, "received from client-%s\n", buffer);

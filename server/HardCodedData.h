@@ -1,5 +1,8 @@
+#pragma warning(disable: 6387)
+
 #pragma once
 //This Header file contains all of includes which are being used in main.c
+
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _WINSOCK_DEPRECATED_NO_WARNINGS

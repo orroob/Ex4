@@ -110,6 +110,7 @@ int RecvDataThread(char** AcceptedStr, SOCKET client_s)
 	}
 	return TRNS_SUCCEEDED;
 }
+
 /// <summary>
 /// Get message type and arranfe a buffer that contains the message needed to be sent
 /// </summary>
@@ -228,6 +229,7 @@ char* PrepareMessage(int messageType, char* arg1, char* arg2, char* arg3) // nee
 	}
 	return buffer;
 }
+
 /// <summary>
 /// func that sends a chunk of the buffer
 /// </summary>
@@ -261,6 +263,7 @@ int SendBuffer(const char* Buffer, int BytesToSend, SOCKET sd)
 
 	return TRNS_SUCCEEDED;
 }
+
 /// <summary>
 /// func that calls another func that will send smaller chunks of the buffer
 /// </summary>
@@ -297,6 +300,7 @@ int SendString(const char* Str, SOCKET sd)
 
 	return SendRes;
 }
+
 /// <summary>
 /// put in buffer the message and use a func that will senf it to the server
 /// </summary>
