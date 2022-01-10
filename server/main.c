@@ -444,7 +444,6 @@ int PlayGame(SOCKET s, int index)
 				{
 					printError("Error receiving from client", &(LogFiles[index]), SOCKET_ERR);
 				}
-				
 				writeMessageToLogFile(received, RECEIVED, index);
 			}
 		}
